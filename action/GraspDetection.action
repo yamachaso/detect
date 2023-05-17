@@ -1,0 +1,7 @@
+sensor_msgs/Image image
+sensor_msgs/Image depth
+sensor_msgs/PointCloud2 points
+---
+std_msgs/Header header
+detect/DetectedObject[] objects
+---

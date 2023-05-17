@@ -1,0 +1,28 @@
+<launch>
+    <arg name="fps" default="30" />
+    <arg name="device" default="cuda:0" />
+    <arg name="use_bag" default="true" />
+    <arg name="bag" default="$(find detect)/outputs/bags/robot_20.bag" />
+    <arg name="robot_name" default="myrobot" />
+    <arg name="image_topic" default="/$(arg robot_name)/body_camera/color/image_raw" />
+    <arg name="depth_topic" default="/$(arg robot_name)/body_camera/aligned_depth_to_color/image_raw" />
+    <arg name="filtered_image_topic" default="/$(arg robot_name)/body_camera/aligned_depth_to_color/image_raw" />
+
+    <param name="use_sim_time" value="true" />
+
+    <param name="fps" value="$(arg fps)" />
+    <param name="device" value="$(arg device)" />
+    <param name="image_topic" value="$(arg image_topic)" />
+    <param name="depth_topic" value="$(arg depth_topic)" />
+
+    <node name="rgb_view" pkg="rqt_image_view" type="rqt_image_view" args="$(arg image_topic)" />
+    <node name="filtered_image_view" pkg="rqt_image_view" type="rqt_image_view" args="$(arg filtered_image_topic)" />
+
+    <group if="$(arg use_bag)">
+        <node name="rosbag_play" pkg="rosbag" type="play" args="$(arg bag) -r $(arg fps) -l --clock" />
+        <node name="grasp_detection_test_client" pkg="detect" type="test_grasp_detection.py" output="screen" />
+    </group>
+
+    <!-- action server -->
+    <node name="depth_filter_server" pkg="detect" type="depth_filter_server.py" />
+</launch>

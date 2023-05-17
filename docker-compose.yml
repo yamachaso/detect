@@ -1,0 +1,58 @@
+version: "2.3"
+services:
+  detectron2:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        BUILD_USER: ${USER}
+    image: detectron2
+    container_name: detectron2
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - capabilities:
+                - gpu
+    shm_size: "10gb"
+    ulimits:
+      memlock: -1
+      stack: 67108864
+    volumes:
+      # directories
+      - /tmp/.X11-unix:/tmp/.X11-unix:ro
+      # - $HOME/.Xauthority:/root/.Xauthority
+      # - XAUTHORITY=/root/.Xauthority
+      - ./src:/home/${USER}/catkin_ws/src/detect/src
+      - ./msg:/home/${USER}/catkin_ws/src/detect/msg
+      - ./srv:/home/${USER}/catkin_ws/src/detect/srv
+      - ./action:/home/${USER}/catkin_ws/src/detect/action
+      - ./launch:/home/${USER}/catkin_ws/src/detect/launch
+      - ./scripts:/home/${USER}/catkin_ws/src/detect/scripts
+      - ./configs:/home/${USER}/catkin_ws/src/detect/configs
+      - ./resources:/home/${USER}/catkin_ws/src/detect/resources
+      - ./outputs:/home/${USER}/catkin_ws/src/detect/outputs
+      - ./docs:/home/${USER}/catkin_ws/src/detect/docs
+      - ./CMakeLists.txt:/home/${USER}/catkin_ws/src/detect/CMakeLists.txt
+      - ./package.xml:/home/${USER}/catkin_ws/src/detect/package.xml
+      # - ./:/home/${USER}/catkin_ws/src/detect
+    environment:
+      # - DISPLAY=host.docker.internal${DISPLAY}
+      - DISPLAY=${DISPLAY}
+      - NVIDIA_VISIBLE_DEVICES=all
+      # - ROS_IP=detectron2
+      - ROS_MASTER_URI=http://${ROS_MASTER_IP:-127.0.0.1}:11311
+      - PYTHONPATH=/home/${USER}/catkin_ws/src/detect/scripts:${PYTHONPATH}
+    networks:
+      - ros_dev_external
+    privileged: true
+    tty: true
+    # Uncomment with proper source to access webcam from docker
+    # devices:
+    #   - /dev/video0:/dev/video0
+    working_dir: /home/${USER}/catkin_ws/src/detect
+    command: bash -c "catkin build && /bin/bash"
+
+networks:
+  ros_dev_external:
+    external: true

@@ -1,0 +1,4 @@
+sensor_msgs/Image base_image
+detect/Candidates[] candidates_list
+---
+---
