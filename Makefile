@@ -12,10 +12,10 @@ endif
 
 	cp .devcontainer/devcontainer_example.json .devcontainer/devcontainer.json
 	docker network create ros_dev_external
-	docker-compose build
+	docker compose build
 
 start:
-	ROS_MASTER_IP=$(ip_address) docker-compose up -d --force-recreate
+	ROS_MASTER_IP=$(ip_address) docker compose up -d --force-recreate
 
 shell:
-	docker-compose exec detectron2 bash
+	docker compose exec detectron2 bash
