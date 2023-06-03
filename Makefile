@@ -4,10 +4,10 @@ force_build=false
 init:
 ifeq ($(force_build), true)
 	docker build -f Dockerfile.base \
-		-t sin392/cuda_detectron2_ros:latest \
+		-t yamachaso/cuda_detectron2_ros:latest \
 		--build-arg USER_ID=${UID} .
 else
-	docker pull sin392/cuda_detectron2_ros:latest
+	docker pull yamachaso/cuda_detectron2_ros:latest
 endif
 
 	cp .devcontainer/devcontainer_example.json .devcontainer/devcontainer.json
