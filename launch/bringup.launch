@@ -1,9 +1,10 @@
 <launch>
-    <arg name="fps" default="1" />
-    <arg name="device" default="cuda:0" />
     <arg name="show_view" default="true" />
     <arg name="use_bag" default="false" />
     <arg name="bag" default="$(find detect)/outputs/bags/robot_20.bag" />
+
+    <arg name="fps" default="1" />
+    <arg name="device" default="cuda:0" />
     <arg name="enable_depth_filter" default="true" />
     <arg name="enable_candidate_filter" default="true" />
     <arg name="finger_num" default="4" />
@@ -60,11 +61,14 @@
     <param name="el_insertion_th" value="$(arg el_insertion_th)" />
     <param name="el_contact_th" value="$(arg el_contact_th)" />
     <param name="el_bw_depth_th" value="$(arg el_bw_depth_th)" />
+    
     <param name="augment_anchors" value="$(arg augment_anchors)" />
     <param name="angle_for_augment" value="$(arg angle_for_augment)" />
+    
     <param name="robot_name" value="$(arg robot_name)" />
     <param name="debug" value="$(arg debug)" />
     <param name="visualize_only_best_cnd" value="$(arg visualize_only_best_cnd)" />
+    
     <param name="image_topic" value="$(arg image_topic)" />
     <param name="depth_topic" value="$(arg depth_topic)" />
     <param name="image_info_topic" value="$(arg image_info_topic)" />
