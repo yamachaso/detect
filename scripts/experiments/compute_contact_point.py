@@ -12,18 +12,22 @@ from utils import imshow, load_py2_pickle
 # %%
 img_shape = (1000, 1000)
 base_img = np.zeros(img_shape, dtype=np.uint8)
+print(base_img.__sizeof__())
 center = (50, 80)
 circle_img = base_img.copy()
 cv2.circle(circle_img, center, 10, 255, thickness=-1)
 plt.imshow(circle_img, cmap="gray")
 # %%
+# cv2.RETR_EXTERNAL：最も外側の輪郭のみ返す
+# cv2.CHAIN_APPROX_NONE：輪郭上のすべての点を返す
 contours, hierarchy = cv2.findContours(circle_img, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
 x, y, w, h = cv2.boundingRect(contours[0])
 upper_left_point = np.array((x, y))
 print(x, y, w, h)
-print(contours)
+print(len(contours[0]))
 shifted_contours = [contour - upper_left_point for contour in contours]
 cropped_base_img = base_img[y:y + h, x:x + w]
+cropped_base_img = np.zeros((h, w), dtype=np.uint8)
 cnt_img = cropped_base_img.copy()
 cv2.drawContours(cnt_img, shifted_contours, -1, 255)
 plt.imshow(cnt_img, cmap="gray")
@@ -32,15 +36,18 @@ line_img = cropped_base_img.copy()
 line_pt1 = center
 line_pt2 = (80, 20)
 shifted_line_pt1 = center - upper_left_point
-shifted_line_pt2 = (80, 20) - upper_left_point
-line_img = cv2.line(line_img, tuple(shifted_line_pt1), tuple(shifted_line_pt2), 255, 1)
-plt.imshow(line_img, cmap="gray")
+shifted_line_pt2 = line_pt2 - upper_left_point
+line_img = cv2.line(line_img, tuple(shifted_line_pt1), tuple(shifted_line_pt2), 122, 1)
+print(line_img.shape)
+# matplotlibでグレースケール表示するにはRGB形式にする必要がある
+gray_line_img = cv2.cvtColor(line_img, cv2.COLOR_GRAY2RGB)
+plt.imshow(gray_line_img, cmap="gray")
 
 # %%
 bitwise_img = cropped_base_img.copy()
 cv2.bitwise_and(cnt_img, line_img, bitwise_img)
 plt.imshow(bitwise_img, cmap="gray")
-intersection = [(x, y) for x, y in zip(*np.where(bitwise_img > 0))][0]
+intersection = [(x, y) for y, x in zip(*np.where(bitwise_img > 0))][0]
 original_intersection = tuple(intersection + upper_left_point)
 print("intersection:", intersection)
 print("original intersection:", original_intersection)
@@ -72,7 +79,6 @@ def compute_intersection_between_contour_and_line(img_shape, contour, line_pt1_x
 
 # %%
 intersection = compute_intersection_between_contour_and_line(base_img.shape[:2], contours[0], line_pt1, line_pt2)
-print("intersection:", intersection)
 # %%
 # timeitやcProfileの引数にndarray形式が使えない、tupleやlistで渡すと今度は関数内部でエラー
 # n = 1000
@@ -92,9 +98,7 @@ cProfile.run("wrapper()")
 # %%
 path_list = sorted(glob(f"{SAMPLES_PATH}/saved_data/*"))
 path = path_list[0]
-
 data = load_py2_pickle(path)
-
 img = data["img"]
 depth = data["depth"]
 objects = data["objects"]
@@ -102,7 +106,17 @@ objects = data["objects"]
 fig, axes = plt.subplots(1, 2)
 axes[0].imshow(img)
 axes[1].imshow(depth, cmap="binary")
-
+#%%
+# candidatesの確認
+candidates_check_img = np.zeros((1000, 1000, 3), dtype=np.uint8)
+for points in objects[0]['candidates']:
+    # np.int64をintに変換。intでないと色指定ができない。
+    color = [color.item() for c in np.random.choice(range(256), size=3)]
+    for x, y in points:
+        cv2.circle(candidates_check_img, [x, y], 10, color, thickness=-1)
+    
+    
+plt.imshow(candidates_check_img, cmap="gray")
 # %%
 contact_img = img.copy()
 img_shape = contact_img.shape[:2]
@@ -207,6 +221,8 @@ for obj in objects:
             cv2.circle(contact_img_4, contact_point, 3, (0, 255, 0), 1, lineType=cv2.LINE_AA)
             cv2.circle(contact_img_4, edge, 3, (255, 0, 0), 1, lineType=cv2.LINE_AA)
 imshow(contact_img_4)
+# %%%
+np.vstack((np.array([1, 2, 3]), np.array([4,5,6])))
 
 # %%
 # ipとcpの間のdepthを調べる
@@ -217,7 +233,6 @@ def extract_depth_between_two_points(depth, p1, p2):
     h, w = np.linspace(p1[0], p2[0], n), np.linspace(p1[1], p2[1], n)
     res = map_coordinates(depth, np.vstack((h, w)))
     return res
-
 
 fig, axes = plt.subplots(1, 2)
 hist_1 = extract_depth_between_two_points(depth, center, edge)

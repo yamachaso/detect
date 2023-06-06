@@ -28,10 +28,10 @@ axes[0].imshow(img)
 axes[1].imshow(depth, cmap="binary")
 # %%
 normalized_depth = (depth.copy() - depth.min()) / (depth.max() - depth.min())
-
 grad_img = ((1 - normalized_depth[:, :, np.newaxis]) * 255).astype("uint8")
-heatmap_img = cv2.applyColorMap(grad_img, cv2.COLORMAP_JET)
 
+heatmap_img = cv2.applyColorMap(grad_img, cv2.COLORMAP_JET)
+imshow(heatmap_img)
 base_img = cv2.addWeighted(img, 1, heatmap_img, 0.2, 0)
 imshow(base_img)
 
@@ -54,6 +54,7 @@ contour_img = base_img.copy()
 cv2.drawContours(contour_img, contours, -1, (255, 255, 0), -1)
 alpha = 0.1
 overlay_img = cv2.addWeighted(base_img, 1 - alpha, contour_img, alpha, 0)
+imshow(overlay_img)
 cv2.drawContours(overlay_img, contours, -1, (255, 255, 0), 2)
 imshow(overlay_img)
 # %%

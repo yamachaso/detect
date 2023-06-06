@@ -92,7 +92,7 @@ class GraspDetectionServer:
         # Action Clients
         self.is_client = InstanceSegmentationClient()
         self.cdt_client = ComputeDepthThresholdClient() if enable_depth_filter else None
-        self.tf_client = TFClient("base_link")
+        self.tf_client = TFClient("base_link") # base_linkの座標系に変換するtf変換クライアント
         self.visualize_client = VisualizeClient()
         # Others
         self.bridge = CvBridge()
