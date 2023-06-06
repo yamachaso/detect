@@ -27,6 +27,7 @@ class TFTransformServer:
         self.server.set_succeeded(result)
 
     def get_trans(self, target_frame: str, frame_id: str, stamp: rospy.Time):
+        # frame_id に対する target_frame の座標
         trans = self.buffer.lookup_transform(target_frame, frame_id, stamp)
 
         return trans

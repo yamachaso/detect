@@ -7,11 +7,10 @@ ifeq ($(force_build), true)
 		-t yamachaso/cuda_detectron2_ros:latest \
 		--build-arg USER_ID=${UID} .
 else
-	docker pull yamachaso/cuda_detectron2_ros:latest
+	docker pull sin392/cuda_detectron2_ros:latest
 endif
 
 	cp .devcontainer/devcontainer_example.json .devcontainer/devcontainer.json
-	docker network create ros_dev_external
 	docker compose build
 
 start:

@@ -1,5 +1,5 @@
 # base image is creted by "make init"
-FROM yamachaso/cuda_detectron2_ros:latest
+FROM sin392/cuda_detectron2_ros:latest
 
 ARG BUILD_USER
 ENV USER ${BUILD_USER}

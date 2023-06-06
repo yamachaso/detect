@@ -55,6 +55,7 @@ axes[1][1].set_xlim(objects_min_depth, objects_max_depth)
 fig.show()
 
 # %%
+# 一番盛り上がっている部分の深さ
 # optimal_depth_threshの計算はmaskありhistから計算する
 hist = hist_values_with_mask
 min_v = objects_min_depth
@@ -68,7 +69,10 @@ for i in range(min_v, max_v + 1):
     t3 = np.sum(hist[i + n + 1:i + n * 2 + 1])
     res = t1 - t2 - t3
     h_list = np.append(h_list, res)
+    if i == 989:
+        print(t1, t2, t3)
 sorted_h = np.argsort(h_list) + min_v  # argsortはデフォルト昇順
+# print(sorted_h)
 optimal_depth_thresh = sorted_h[-1]
 
 plt.xlim(min_v, max_v)
@@ -80,14 +84,20 @@ print(optimal_depth_thresh)
 flont_mask = np.where(depth <= optimal_depth_thresh, 255, 0).astype("uint8")
 flont_img = cv2.bitwise_and(img, img, mask=flont_mask)
 imshow(flont_img)
+
+# %%
+hist[:, 0].shape
+
 # %%
 # ヒストグラム平滑化して極値をみつけてもいいかも
 filtered_y = savgol_filter(hist[:, 0], 10, 1)
 plt.plot(filtered_y)
 plt.xlim(min_v, max_v)
+# argrelmaxは極大
 for x in argrelmax(filtered_y):
     print(x)
     plt.plot(x, filtered_y[x], "ro", color="orange")
+# argrelmaxは極小
 for x in argrelmin(filtered_y):
     print(x)
     plt.plot(x, filtered_y[x], "ro", color="pink")
@@ -163,7 +173,10 @@ plt.vlines(optimal_ddi_thresh, 0, hist.max(), color="red")
 # マスク内のピクセル欠損がやや気になるか？
 optimal_depth_thresh_2 = np.mean(depth[ddi <= optimal_ddi_thresh])
 print(optimal_depth_thresh_2)
+# imshow(merged_mask)
 flont_mask = np.where(depth <= optimal_depth_thresh_2, merged_mask, 0).astype("uint8")
+# imshow(flont_mask)
+
 # ピクセル欠損の補完
 closing_flont_mask = cv2.morphologyEx(flont_mask, cv2.MORPH_CLOSE, np.ones((3, 3), np.uint8))
 # 冗長かもしれないが膨張によってはみ出たピクセルの除去
