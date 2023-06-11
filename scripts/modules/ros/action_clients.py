@@ -40,6 +40,8 @@ class VisualizeClient:
         self.draw_candidates_action = SimpleActionClient("visualize_server_draw_candidates", VisualizeCandidatesAction)
         self.draw_target_action = SimpleActionClient("visualize_server_draw_target", VisualizeTargetAction)
 
+        self.actions.append(self.draw_candidates_action)
+        self.actions.append(self.draw_target_action)
         for action in self.actions:
             action.wait_for_server()
 

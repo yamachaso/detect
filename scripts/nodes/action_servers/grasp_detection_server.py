@@ -183,7 +183,7 @@ class GraspDetectionServer:
             start_time = time()
             img = self.bridge.imgmsg_to_cv2(img_msg)
             depth = self.bridge.imgmsg_to_cv2(depth_msg)
-            instances = self.is_client.predict(img_msg)
+            instances = self.is_client.predict(img_msg) # List[Instance]
             # TODO: depthしきい値を求めるためにmerged_maskが必要だが非効率なので要改善
             masks = [self.bridge.imgmsg_to_cv2(instance_msg.mask) for instance_msg in instances]
             # TODO: compute n by camera distance

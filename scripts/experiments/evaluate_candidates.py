@@ -109,7 +109,6 @@ imshow(crop(candidate_img_2, center, 160))
 # %%
 # 生き残ったinsertion pointからcontact pointを計算
 candidate_img_3 = img.copy()
-
 candidate_ip_scores = []
 candidate_cp_scores = []
 for points in valid_candidates:
@@ -257,6 +256,7 @@ class GraspCandidateElement:
         return img
 
 
+print(len(contour[0]))
 gce = GraspCandidateElement(depth, contour, center, edge, finger_radius)
 print(gce.get_points())
 print(gce.get_scores())
@@ -264,7 +264,7 @@ print("total score:", gce.total_score)
 
 test_img = img.copy()
 gce.draw(test_img, (255, 100, 0))
-
+imshow(test_img)
 imshow(crop(test_img, center, 160))
 # %%
 
@@ -536,7 +536,7 @@ def new_sub_task(contour, center, candidate):
     global finger_radius, hand_radius, depth
     return NewGraspCandidate(
         hand_radius_px=hand_radius, finger_radius_px=finger_radius,
-        angle=0, depth=depth, contour=contour,
+        angle=0, depth=depth, contour=contour, original_center=center,
         center=center, insertion_points=candidate,
         elements_th=0, center_diff_th=0,
         el_insertion_th=0.2, el_contact_th=0.2,
@@ -553,7 +553,7 @@ def new_task(pool, obj):
     gc_list = pool.starmap(new_sub_task, args)
     return gc_list
 
-
+print("####")
 with Manager() as manager:
     with manager.Pool(100) as pool:
         args = [(pool, obj) for obj in objects]
@@ -577,9 +577,10 @@ for i, gc_list in enumerate(gc_list_list):
             for k, el in enumerate(gc.elements):
                 if len(el.debug_infos):
                     print(k, el.debug_infos)
-
         cv2.circle(candidate_img, gc.center, 3, (0, 0, 255), -1, cv2.LINE_AA)
 
 imshow(candidate_img)
+print(len(gc_list_list[0]))
+
 
 # %%

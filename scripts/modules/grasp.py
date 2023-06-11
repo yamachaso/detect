@@ -322,6 +322,9 @@ class GraspDetector:
         self.unit_rmat = self._compute_rmat(self.unit_angle)
 
     def _compute_rmat(self, angle):
+        """
+        回転行列を生成
+        """
         cos_rad, sin_rad = np.cos(np.radians(angle)), np.sin(np.radians(angle))
         return np.array([[cos_rad, -sin_rad], [sin_rad, cos_rad]])
 
@@ -394,6 +397,9 @@ class GraspDetector:
 
 
 def compute_depth_profile_in_finger_area(depth: Image, pt: ImagePointUV, finger_radius_px: Px) -> Tuple[Mm, Mm, Mm]:
+    """
+    only here
+    """
     h, w = depth.shape[:2]
     rounded_radius = np.int0(np.round(finger_radius_px))
     r_slice = slice(max(0, pt[1] - rounded_radius),
@@ -409,16 +415,99 @@ def compute_depth_profile_in_finger_area(depth: Image, pt: ImagePointUV, finger_
     return int(np.min(depth_values_in_mask)), int(np.max(depth_values_in_mask)), int(np.mean(depth_values_in_mask))
 
 
+
+
+
+
+def compute_intersection_between_contour_and_line(img_shape, contour, line_pt1_xy, line_pt2_xy):
+    """
+    輪郭と線分の交点座標を取得する
+    TODO: 線分ごとに描画と論理積をとり非効率なので改善方法要検討
+    only here
+    """
+    blank_img = np.zeros(img_shape)
+    # クロップ前に計算したcontourをクロップ後の画像座標に変換し描画
+    cnt_img = blank_img.copy()
+    cv2.drawContours(cnt_img, [contour], -1, 255, 1, lineType=cv2.LINE_AA)
+    # クロップ前に計算したlineをクロップ後の画像座標に変換し描画
+    line_img = blank_img.copy()
+    # 斜めの場合、ピクセルが重ならない場合あるのでlineはthicknessを２にして平均をとる
+    line_img = cv2.line(line_img, line_pt1_xy, line_pt2_xy,
+                        255, 2, lineType=cv2.LINE_AA)
+    # バイナリ画像(cnt_img, line_img)のbitwiseを用いて、contourとlineの交点を検出
+    bitwise_img = blank_img.copy()
+    cv2.bitwise_and(cnt_img, line_img, bitwise_img)
+
+    intersections = [(w, h)
+                     for h, w in zip(*np.where(bitwise_img > 0))]  # hw to xy
+    if len(intersections) == 0:
+        raise Exception(
+            "No intersection between a contour and a candidate element, 'hand_radius_mm' or 'fp' may be too small")
+    mean_intersection = np.int0(np.round(np.mean(intersections, axis=0)))
+    return mean_intersection
+
+
+def compute_bw_depth_profile(depth, contact_point, insertion_point):
+    """
+    only here
+    """
+    values = extract_depth_between_two_points(
+        depth, contact_point, insertion_point)
+    min_depth, max_depth = values.min(), values.max()
+    # 欠損ピクセルの値は除外
+    valid_values = values[values > 0]
+    mean_depth = np.mean(valid_values) if len(valid_values) > 0 else 0
+    return min_depth, max_depth, mean_depth
+
+
 def insertion_point_score(min_d: Mm, max_d: Mm, mean_d: Mm) -> float:
+    """
+    not in use now
+    """
     return ((mean_d - min_d) / (max_d - min_d + 1e-6)) ** 2
 
 
 def evaluate_single_insertion_point(depth: Image, pt: ImagePointUV, finger_radius_px: Px, min_d: Mm, max_d: Mm) -> float:
+    """
+    not in use now
+    """
     _, _, mean_d = compute_depth_profile_in_finger_area(
         depth, pt, finger_radius_px)
     score = insertion_point_score(min_d, max_d, mean_d)
     return score
 
+
+def compute_contact_point(contour, center, edge, finger_radius):
+    """
+    not in use now
+    """
+    x, y, w, h = cv2.boundingRect(contour)
+    upper_left_point = np.array((x, y))
+    shifted_contour = contour - upper_left_point
+    shifted_center, shifted_edge = [
+        tuple(pt - upper_left_point) for pt in (center, edge)]
+
+    shifted_intersection = compute_intersection_between_contour_and_line(
+        (h, w), shifted_contour, shifted_center, shifted_edge)
+    intersection = tuple(shifted_intersection + upper_left_point)
+
+    direction_v = np.array(edge) - np.array(center)
+    unit_direction_v = direction_v / np.linalg.norm(direction_v, ord=2)
+    # 移動後座標 = 移動元座標 + 方向ベクトル x 移動量(指半径[pixel])
+    contact_point = np.int0(
+        np.round(intersection + unit_direction_v * finger_radius))
+
+    return contact_point
+
+
+def compute_bw_depth_score(depth, contact_point, insertion_point, min_depth):
+    """
+    not in use now
+    """
+    _, max_depth, mean_depth = compute_bw_depth_profile(
+        depth, contact_point, insertion_point)
+    score = max(0, (mean_depth - min_depth)) / (max_depth - min_depth)
+    return score
 
 # def evaluate_insertion_points(depth: Image, candidates: List[np.ndarray], finger_radius_px: Px, min_d: Mm, max_d: Mm) -> List[float]:
 #     scores = []
@@ -443,68 +532,3 @@ def evaluate_single_insertion_point(depth: Image, pt: ImagePointUV, finger_radiu
 #         scores[i:i + finger_num]) for i in range(0, len(scores), finger_num)]
 
 #     return candidates_scores
-
-
-def compute_intersection_between_contour_and_line(img_shape, contour, line_pt1_xy, line_pt2_xy):
-    """
-    輪郭と線分の交点座標を取得する
-    TODO: 線分ごとに描画と論理積をとり非効率なので改善方法要検討
-    """
-    blank_img = np.zeros(img_shape)
-    # クロップ前に計算したcontourをクロップ後の画像座標に変換し描画
-    cnt_img = blank_img.copy()
-    cv2.drawContours(cnt_img, [contour], -1, 255, 1, lineType=cv2.LINE_AA)
-    # クロップ前に計算したlineをクロップ後の画像座標に変換し描画
-    line_img = blank_img.copy()
-    # 斜めの場合、ピクセルが重ならない場合あるのでlineはthicknessを２にして平均をとる
-    line_img = cv2.line(line_img, line_pt1_xy, line_pt2_xy,
-                        255, 2, lineType=cv2.LINE_AA)
-    # バイナリ画像(cnt_img, line_img)のbitwiseを用いて、contourとlineの交点を検出
-    bitwise_img = blank_img.copy()
-    cv2.bitwise_and(cnt_img, line_img, bitwise_img)
-
-    intersections = [(w, h)
-                     for h, w in zip(*np.where(bitwise_img > 0))]  # hw to xy
-    if len(intersections) == 0:
-        raise Exception(
-            "No intersection between a contour and a candidate element, 'hand_radius_mm' or 'fp' may be too small")
-    mean_intersection = np.int0(np.round(np.mean(intersections, axis=0)))
-    return mean_intersection
-
-
-# not in use now
-def compute_contact_point(contour, center, edge, finger_radius):
-    x, y, w, h = cv2.boundingRect(contour)
-    upper_left_point = np.array((x, y))
-    shifted_contour = contour - upper_left_point
-    shifted_center, shifted_edge = [
-        tuple(pt - upper_left_point) for pt in (center, edge)]
-
-    shifted_intersection = compute_intersection_between_contour_and_line(
-        (h, w), shifted_contour, shifted_center, shifted_edge)
-    intersection = tuple(shifted_intersection + upper_left_point)
-
-    direction_v = np.array(edge) - np.array(center)
-    unit_direction_v = direction_v / np.linalg.norm(direction_v, ord=2)
-    # 移動後座標 = 移動元座標 + 方向ベクトル x 移動量(指半径[pixel])
-    contact_point = np.int0(
-        np.round(intersection + unit_direction_v * finger_radius))
-
-    return contact_point
-
-
-def compute_bw_depth_profile(depth, contact_point, insertion_point):
-    values = extract_depth_between_two_points(
-        depth, contact_point, insertion_point)
-    min_depth, max_depth = values.min(), values.max()
-    # 欠損ピクセルの値は除外
-    valid_values = values[values > 0]
-    mean_depth = np.mean(valid_values) if len(valid_values) > 0 else 0
-    return min_depth, max_depth, mean_depth
-
-
-def compute_bw_depth_score(depth, contact_point, insertion_point, min_depth):
-    _, max_depth, mean_depth = compute_bw_depth_profile(
-        depth, contact_point, insertion_point)
-    score = max(0, (mean_depth - min_depth)) / (max_depth - min_depth)
-    return score

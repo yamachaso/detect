@@ -84,6 +84,7 @@ flatten_points = sum(target_candidates, [])
 print(len(flatten_points))
 print(flatten_points)
 
+
 depth_list = [depth[uv[::-1]] for uv in flatten_points]
 print(depth_list)
 fig, ax = plt.subplots()
@@ -208,7 +209,7 @@ imshow(candidate_img_4)
 print(target_candidates)
 finger_num = len(target_candidate)
 candidates_scores = [np.prod(scores[i:i + 4]) for i in range(0, len(scores), finger_num)]
-print(candidates_scores)
+print(len(candidates_scores))
 
 best_candidate = target_candidates[np.argmax(candidates_scores)]
 print(best_candidate)

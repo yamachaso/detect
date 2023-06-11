@@ -11,6 +11,9 @@ bridge = CvBridge()
 
 
 class InstancesPublisher(Publisher):
+    """
+    not in use now
+    """
     def __init__(self, name, subscriber_listener=None, tcp_nodelay=False, latch=False, headers=None, queue_size=None):
         super().__init__(name, InstancesStamped, subscriber_listener,
                          tcp_nodelay, latch, headers, queue_size)
@@ -25,6 +28,9 @@ class InstancesPublisher(Publisher):
 
 
 class ImageMatPublisher(Publisher):
+    """
+    backlink:instance_segmentation_server.py, visualize_server.py
+    """
     global bridge
 
     def __init__(self, name, subscriber_listener=None, tcp_nodelay=False, latch=False, headers=None, queue_size=None):
@@ -39,12 +45,26 @@ class ImageMatPublisher(Publisher):
 
 
 class DetectedObjectsPublisher(Publisher):
+    """
+    not in use now
+    """
     def __init__(self, name, subscriber_listener=None, tcp_nodelay=False, latch=False, headers=None, queue_size=None):
         super().__init__(name, DetectedObjectsStamped,
                          subscriber_listener, tcp_nodelay, latch, headers, queue_size)
         self.stack = []
 
     def push_item(self, points: List[Point], center_pose: PoseStamped, angles: List[float], short_radius: float, long_radius: float, length_to_center: float):
+        """
+        DetectedObject.msg:
+            geometry_msgs/Point[] points
+            geometry_msgs/PoseStamped center_pose
+            int32 angle
+            float32 short_radius
+            float32 long_radius
+            float32 length_to_center
+            float32 score
+            int32 index
+        """
         msg = DetectedObject(
             points=points,
             center_pose=center_pose,

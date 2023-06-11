@@ -20,6 +20,10 @@ config_path = f"{CONFIGS_PATH}/config.yaml"
 weight_path = f"{OUTPUTS_PATH}/2022_10_16_08_01/model_final.pth"
 device = "cuda:0"
 
+print(config_path)
+print(weight_path)
+print(device)
+
 cfg = get_cfg()
 cfg.merge_from_file(config_path)
 cfg.MODEL.WEIGHTS = weight_path

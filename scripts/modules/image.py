@@ -15,6 +15,9 @@ def gen_color_palette(n):
 
 
 def transform_ddi(depth, n):
+    """
+    only here
+    """
     mask = np.ones((n, n)).astype('uint8')  # erodeで使用するmaskはuint8
     # mask[n//2, n//2] = 0
     mask[1:-1, 1:-1] = 0  # 外周部以外は０に
@@ -25,6 +28,9 @@ def transform_ddi(depth, n):
 
 
 def compute_thresh_by_histgram(hist, min_v, max_v, n):
+    """
+    only here
+    """
     h_list = []
     for i in range(min_v, max_v + 1):
         t1 = np.sum(hist[i - n:i + n + 1])
@@ -38,6 +44,9 @@ def compute_thresh_by_histgram(hist, min_v, max_v, n):
 
 
 def compute_optimal_ddi_thresh(ddi, whole_mask, n):
+    """
+    only here
+    """
     ddi_hist_wo_mask = cv2.calcHist([ddi], channels=[0], mask=whole_mask, histSize=[
         UINT16MAX], ranges=[0, UINT16MAX - 1])
     ddi_values_on_mask = ddi[whole_mask > 0]
@@ -48,7 +57,10 @@ def compute_optimal_ddi_thresh(ddi, whole_mask, n):
 
 
 def compute_optimal_depth_thresh(depth, whole_mask, n):
-    """前景抽出のためのdepthしきい値を算出する"""
+    """
+    前景抽出のためのdepthしきい値を算出する
+    backlink:compute_depth_threshold_server.py
+    """
     # depthからddiへの変換（マスクの範囲外は平均値で補完）
     ddi = transform_ddi(np.where(whole_mask > 0, depth,
                         depth[depth > 0].mean()), n)
@@ -69,23 +81,19 @@ def compute_optimal_depth_thresh(depth, whole_mask, n):
     return rounded_optimal_depth_thresh
 
 
-def refine_flont_mask(whole_flont_mask, instance_masks, thresh=0.8):
-    res_mask = np.zeros_like(whole_flont_mask)
-    for mask in instance_masks:
-        overlay = np.where(whole_flont_mask > 0, mask, 0)
-        score = len(overlay[overlay > 0]) / len(mask[mask > 0])
-        if score <= thresh:
-            continue
-        res_mask += mask
-    res_mask = np.where(res_mask > 0, 255, 0).astype("uint8")
-    return res_mask
 
 
 def merge_mask(instance_masks):
+    """
+    backlink: grasp_detection_server.py
+    """
     return np.where(np.sum(instance_masks, axis=0) > 0, 255, 0).astype("uint8")
 
 
 def extract_flont_instance_indexes(whole_flont_mask, instance_masks, thresh=0.8):
+    """
+    backlink: grasp_detection_server.py
+    """
     flont_indexes = []
     for i, mask in enumerate(instance_masks):
         overlay = np.where(whole_flont_mask > 0, mask, 0)
@@ -96,6 +104,9 @@ def extract_flont_instance_indexes(whole_flont_mask, instance_masks, thresh=0.8)
 
 
 def extract_flont_mask_with_thresh(depth, thresh, n):
+    """
+    backlink:grasp_detection_server.py
+    """
     # flont_mask = np.where(depth <= thresh, whole_mask, 0).astype("uint8")
     flont_mask = np.where(depth <= thresh, 255, 0).astype("uint8")
     # 欠損ピクセルの補完
@@ -108,7 +119,20 @@ def extract_flont_mask_with_thresh(depth, thresh, n):
     return final_flont_mask
 
 
+def extract_depth_between_two_points(depth, p1, p2, mode="nearest", order=1):
+    """
+    backlink:grasp.py
+    """
+    n = np.int0(np.round(np.linalg.norm(np.array(p1) - np.array(p2), ord=2)))
+    h, w = np.linspace(p1[1], p2[1], n), np.linspace(p1[0], p2[0], n)
+    res = map_coordinates(depth, np.vstack((h, w)), mode=mode, order=order)
+    return res
+
+
 def extract_flont_img(img, depth, whole_mask, n):
+    """
+    not in use now
+    """
     optimal_depth_thresh = compute_optimal_depth_thresh(depth, whole_mask, n)
     flont_mask = extract_flont_mask_with_thresh(depth, optimal_depth_thresh, n)
     result_img = cv2.bitwise_and(img, img, mask=flont_mask)
@@ -116,8 +140,16 @@ def extract_flont_img(img, depth, whole_mask, n):
     return result_img
 
 
-def extract_depth_between_two_points(depth, p1, p2, mode="nearest", order=1):
-    n = np.int0(np.round(np.linalg.norm(np.array(p1) - np.array(p2), ord=2)))
-    h, w = np.linspace(p1[1], p2[1], n), np.linspace(p1[0], p2[0], n)
-    res = map_coordinates(depth, np.vstack((h, w)), mode=mode, order=order)
-    return res
+def refine_flont_mask(whole_flont_mask, instance_masks, thresh=0.8):
+    """
+    not in use now
+    """
+    res_mask = np.zeros_like(whole_flont_mask)
+    for mask in instance_masks:
+        overlay = np.where(whole_flont_mask > 0, mask, 0)
+        score = len(overlay[overlay > 0]) / len(mask[mask > 0])
+        if score <= thresh:
+            continue
+        res_mask += mask
+    res_mask = np.where(res_mask > 0, 255, 0).astype("uint8")
+    return res_mask
