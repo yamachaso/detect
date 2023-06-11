@@ -1,20 +1,20 @@
-ip_address=127.0.0.1
-force_build=false
+force_build=true
 
 init:
 ifeq ($(force_build), true)
-	docker build -f Dockerfile.base \
-		-t yamachaso/cuda_detectron2_ros:latest \
-		--build-arg USER_ID=${UID} .
+	docker build -f Dockerfile.base -t yamachaso/cuda_detectron2_ros:latest .
 else
-	docker pull sin392/cuda_detectron2_ros:latest
+	docker pull yamachaso/cuda_detectron2_ros:latest
 endif
 
 	cp .devcontainer/devcontainer_example.json .devcontainer/devcontainer.json
 	docker compose build
 
 start:
-	ROS_MASTER_IP=$(ip_address) docker compose up -d --force-recreate
+	docker compose up -d --force-recreate
 
-shell:
+stop:
+	docker compose stop
+
+detectron2:
 	docker compose exec detectron2 bash
