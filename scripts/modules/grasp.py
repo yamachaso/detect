@@ -51,7 +51,7 @@ class GraspCandidateElement:
         # TODO: ハンドの開き幅調整可能な場合 insertion point = contact pointとなるので、insertionのスコアはいらない
         # 挿入点の評価
         self.intersection_point = self._compute_intersection_point(contour)
-        _, intersection_max_d, intersection_mean_d = compute_depth_profile_in_finger_area(
+        _, intersection_max_d, intersection_mean_d = self._compute_depth_profile_in_finger_area(
             depth, self.intersection_point, finger_radius_px)
         min_d = intersection_mean_d
         max_d = max(intersection_max_d, self.insertion_point_d)
@@ -101,10 +101,37 @@ class GraspCandidateElement:
         shifted_center, shifted_edge = [
             tuple(pt - upper_left_point) for pt in (self.center, self.insertion_point)]
 
-        shifted_intersection = compute_intersection_between_contour_and_line(
+        shifted_intersection = self._compute_intersection_between_contour_and_line(
             (h, w), shifted_contour, shifted_center, shifted_edge)
         intersection = tuple(shifted_intersection + upper_left_point)
         return intersection
+    
+    def _compute_intersection_between_contour_and_line(self, img_shape, contour, line_pt1_xy, line_pt2_xy):
+        """
+        輪郭と線分の交点座標を取得する
+        TODO: 線分ごとに描画と論理積をとり非効率なので改善方法要検討
+        only here
+        """
+        blank_img = np.zeros(img_shape)
+        # クロップ前に計算したcontourをクロップ後の画像座標に変換し描画
+        cnt_img = blank_img.copy()
+        cv2.drawContours(cnt_img, [contour], -1, 255, 1, lineType=cv2.LINE_AA)
+        # クロップ前に計算したlineをクロップ後の画像座標に変換し描画
+        line_img = blank_img.copy()
+        # 斜めの場合、ピクセルが重ならない場合あるのでlineはthicknessを２にして平均をとる
+        line_img = cv2.line(line_img, line_pt1_xy, line_pt2_xy,
+                            255, 2, lineType=cv2.LINE_AA)
+        # バイナリ画像(cnt_img, line_img)のbitwiseを用いて、contourとlineの交点を検出
+        bitwise_img = blank_img.copy()
+        cv2.bitwise_and(cnt_img, line_img, bitwise_img)
+
+        intersections = [(w, h)
+                        for h, w in zip(*np.where(bitwise_img > 0))]  # hw to xy
+        if len(intersections) == 0:
+            raise Exception(
+                "No intersection between a contour and a candidate element, 'hand_radius_mm' or 'fp' may be too small")
+        mean_intersection = np.int0(np.round(np.mean(intersections, axis=0)))
+        return mean_intersection
 
     def _compute_contact_point(self, intersection_point: ImagePointUV) -> ImagePointUV:
         direction_v = np.array(self.insertion_point) - np.array(self.center)
@@ -116,17 +143,47 @@ class GraspCandidateElement:
 
     def _compute_point_score(self, depth: Image, min_d: Mm, max_d: Mm, pt: ImagePointUV) -> float:
         # TODO: 引数のmin, maxはターゲットオブジェクト周辺の最小値・最大値
-        _, _, mean_d = compute_depth_profile_in_finger_area(
+        _, _, mean_d = self._compute_depth_profile_in_finger_area(
             depth, pt, self.finger_radius_px)
         score = max(0, (mean_d - min_d)) / (max_d - min_d + 1e-6)
         return score
 
     def _compute_bw_depth_score(self, depth: Image, contact_point: ImagePointUV) -> float:
-        min_d, max_d, mean_d = compute_bw_depth_profile(
+        min_d, max_d, mean_d = self._compute_bw_depth_profile(
             depth, contact_point, self.insertion_point)
         # score = max(0, (mean_d - min_d)) / (max_d - min_d + 1e-6)
         score = 1 - ((mean_d - min_d) / (max_d - min_d + 1e-6))
         return score
+    
+    def _compute_bw_depth_profile(self, depth, contact_point, insertion_point):
+        """
+        contact_pointからinsertion_pointの間での深さの最小値・最大値・平均
+        """
+        values = extract_depth_between_two_points(
+            depth, contact_point, insertion_point)
+        min_depth, max_depth = values.min(), values.max()
+        # 欠損ピクセルの値は除外
+        valid_values = values[values > 0]
+        mean_depth = np.mean(valid_values) if len(valid_values) > 0 else 0
+        return min_depth, max_depth, mean_depth
+    
+    def _compute_depth_profile_in_finger_area(self, depth: Image, pt: ImagePointUV, finger_radius_px: Px) -> Tuple[Mm, Mm, Mm]:
+        """
+        ptを中心とする指が差し込まれる範囲における深さの最小値・最大値・平均
+        """
+        h, w = depth.shape[:2]
+        rounded_radius = np.int0(np.round(finger_radius_px))
+        r_slice = slice(max(0, pt[1] - rounded_radius),
+                        min(pt[1] + rounded_radius + 1, h))
+        c_slice = slice(max(0, pt[0] - rounded_radius),
+                        min(pt[0] + rounded_radius + 1, w))
+        cropped_depth = depth[r_slice, c_slice]
+        finger_mask = np.zeros_like(cropped_depth, dtype=np.uint8)
+        cropped_h, cropped_w = cropped_depth.shape[:2]
+        cv2.circle(
+            finger_mask, (cropped_w // 2, cropped_h // 2), rounded_radius, 255, -1)
+        depth_values_in_mask = cropped_depth[finger_mask == 255]
+        return int(np.min(depth_values_in_mask)), int(np.max(depth_values_in_mask)), int(np.mean(depth_values_in_mask))
 
     def _compute_total_score(self) -> float:
         # TODO: ip, cp間のdepthの評価 & 各項の重み付け
@@ -334,7 +391,7 @@ class GraspDetector:
     def compute_insertion_points(self, center: ImagePointUV, base_finger_v: np.ndarray):
         return self._compute_rotated_points(center, base_finger_v, self.base_angle)
 
-    def detect(self, center: ImagePointUV, depth: Image, contour: np.ndarray, radius_for_augment: int = 1, anchor_total_score_th: float = 0.5) -> List[GraspCandidate]:
+    def detect(self, center: ImagePointUV, depth: Image, contour: np.ndarray) -> List[GraspCandidate]:
         # 単位変換
         center_d = depth[center[1], center[0]]
         # center_dが欠損すると0 divisionになるので注意
@@ -367,66 +424,3 @@ class GraspDetector:
 
         return candidates
 
-
-def compute_depth_profile_in_finger_area(depth: Image, pt: ImagePointUV, finger_radius_px: Px) -> Tuple[Mm, Mm, Mm]:
-    """
-    only here
-    """
-    h, w = depth.shape[:2]
-    rounded_radius = np.int0(np.round(finger_radius_px))
-    r_slice = slice(max(0, pt[1] - rounded_radius),
-                    min(pt[1] + rounded_radius + 1, h))
-    c_slice = slice(max(0, pt[0] - rounded_radius),
-                    min(pt[0] + rounded_radius + 1, w))
-    cropped_depth = depth[r_slice, c_slice]
-    finger_mask = np.zeros_like(cropped_depth, dtype=np.uint8)
-    cropped_h, cropped_w = cropped_depth.shape[:2]
-    cv2.circle(
-        finger_mask, (cropped_w // 2, cropped_h // 2), rounded_radius, 255, -1)
-    depth_values_in_mask = cropped_depth[finger_mask == 255]
-    return int(np.min(depth_values_in_mask)), int(np.max(depth_values_in_mask)), int(np.mean(depth_values_in_mask))
-
-
-
-
-
-
-def compute_intersection_between_contour_and_line(img_shape, contour, line_pt1_xy, line_pt2_xy):
-    """
-    輪郭と線分の交点座標を取得する
-    TODO: 線分ごとに描画と論理積をとり非効率なので改善方法要検討
-    only here
-    """
-    blank_img = np.zeros(img_shape)
-    # クロップ前に計算したcontourをクロップ後の画像座標に変換し描画
-    cnt_img = blank_img.copy()
-    cv2.drawContours(cnt_img, [contour], -1, 255, 1, lineType=cv2.LINE_AA)
-    # クロップ前に計算したlineをクロップ後の画像座標に変換し描画
-    line_img = blank_img.copy()
-    # 斜めの場合、ピクセルが重ならない場合あるのでlineはthicknessを２にして平均をとる
-    line_img = cv2.line(line_img, line_pt1_xy, line_pt2_xy,
-                        255, 2, lineType=cv2.LINE_AA)
-    # バイナリ画像(cnt_img, line_img)のbitwiseを用いて、contourとlineの交点を検出
-    bitwise_img = blank_img.copy()
-    cv2.bitwise_and(cnt_img, line_img, bitwise_img)
-
-    intersections = [(w, h)
-                     for h, w in zip(*np.where(bitwise_img > 0))]  # hw to xy
-    if len(intersections) == 0:
-        raise Exception(
-            "No intersection between a contour and a candidate element, 'hand_radius_mm' or 'fp' may be too small")
-    mean_intersection = np.int0(np.round(np.mean(intersections, axis=0)))
-    return mean_intersection
-
-
-def compute_bw_depth_profile(depth, contact_point, insertion_point):
-    """
-    only here
-    """
-    values = extract_depth_between_two_points(
-        depth, contact_point, insertion_point)
-    min_depth, max_depth = values.min(), values.max()
-    # 欠損ピクセルの値は除外
-    valid_values = values[values > 0]
-    mean_depth = np.mean(valid_values) if len(valid_values) > 0 else 0
-    return min_depth, max_depth, mean_depth
