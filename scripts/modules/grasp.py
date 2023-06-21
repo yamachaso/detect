@@ -357,41 +357,25 @@ class GraspDetector:
         unit_vector = np.array([0, -1])
         base_finger_v = unit_vector * hand_radius_px  # 単位ベクトル x ハンド半径
         candidates = []
-        # TODO: centerの水増し (水増し用の半径も引数で渡す必要)
-        anchors = [center]
-        if self.augment_anchors:
-            vector_for_augment = unit_vector * radius_for_augment
-            rotated_points = self._compute_rotated_points(
-                center, vector_for_augment, self.angle_for_augment)
-            h, w = depth.shape[:2]
-            # フレームアウトするanchorは除外
-            anchors += [(x, y) for (x, y) in rotated_points
-                        if x >= 0 and y >= 0 and x < w and y < h]
-        # 基準となる線分をbase_angleまでunit_angleずつ回転する (左回り)
-        best_score = 0
-        for anchor in anchors:
-            try:
-                for i in range(self.candidate_num):
-                    finger_v = base_finger_v
-                    insertion_points = self.compute_insertion_points(
-                        anchor, finger_v)
-                    angle = self.unit_angle * i
-                    cnd = GraspCandidate(hand_radius_px=hand_radius_px, finger_radius_px=finger_radius_px, angle=angle,
-                                         depth=depth, contour=contour, original_center=center, center=anchor, insertion_points=insertion_points,
-                                         elements_th=self.elements_th, center_diff_th=self.center_diff_th,
-                                         el_insertion_th=self.el_insertion_th, el_contact_th=self.el_contact_th,
-                                         el_bw_depth_th=self.el_bw_depth_th
-                                         )
-                    candidates.append(cnd)
-                    if cnd.total_score > best_score:
-                        best_score = cnd.total_score
 
-                    base_finger_v = np.dot(base_finger_v, self.unit_rmat)
-                # スコアの良いcandidateがみつかったらanchorの水増しを打ち切り
-                if best_score >= anchor_total_score_th:
-                    break
-            except Exception:
-                pass
+        try:
+            for i in range(self.candidate_num):
+                finger_v = base_finger_v
+                insertion_points = self.compute_insertion_points(
+                    center, finger_v)
+                angle = self.unit_angle * i
+                cnd = GraspCandidate(hand_radius_px=hand_radius_px, finger_radius_px=finger_radius_px, angle=angle,
+                                        depth=depth, contour=contour, original_center=center, center=center, insertion_points=insertion_points,
+                                        elements_th=self.elements_th, center_diff_th=self.center_diff_th,
+                                        el_insertion_th=self.el_insertion_th, el_contact_th=self.el_contact_th,
+                                        el_bw_depth_th=self.el_bw_depth_th
+                                        )
+                candidates.append(cnd)
+
+                base_finger_v = np.dot(base_finger_v, self.unit_rmat)
+
+        except Exception:
+            pass
 
         return candidates
 
