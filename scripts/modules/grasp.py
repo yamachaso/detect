@@ -6,6 +6,7 @@ import numpy as np
 from modules.image import extract_depth_between_two_points
 from modules.type import Image, ImagePointUV, ImagePointUVD, Mm, Px
 
+import rospy
 
 class GraspCandidateElement:
     # ハンド情報、画像情報、局所的情報（ポイント、値）、しきい値
@@ -77,14 +78,14 @@ class GraspCandidateElement:
         # すべてのスコアが基準を満たしたときのみvalid判定
         self.is_valid = True
 
+    def _check_framein(self, h: Px, w: Px, pt: ImagePointUV) -> bool:
+        return not (pt[0] < 0 or pt[1] < 0 or pt[0] >= w or pt[1] >= h)
+
     def _precheck_validness(self) -> bool:
         is_valid_pre = \
             self._check_depth_existance() and \
             self._check_depth_difference()
         return is_valid_pre
-
-    def _check_framein(self, h: Px, w: Px, pt: ImagePointUV) -> bool:
-        return not (pt[0] < 0 or pt[1] < 0 or pt[0] >= w or pt[1] >= h)
 
     def _check_depth_existance(self) -> bool:
         return self.center_d != 0 and self.insertion_point_d != 0
@@ -169,13 +170,12 @@ class GraspCandidateElement:
 
 class GraspCandidate:
     def __init__(self, hand_radius_px, finger_radius_px, angle, depth, contour,
-                 original_center, center, insertion_points,
+                 center, insertion_points,
                  elements_th, center_diff_th, el_insertion_th, el_contact_th, el_bw_depth_th):
         self.hand_radius_px = hand_radius_px
         self.finger_radius_px = finger_radius_px
         self.angle = angle
         # self.bbox_short_radius = bbox_short_radius
-        self.original_center = original_center
         self.center = center
         self.center_d = depth[center[1], center[0]]
 
@@ -183,7 +183,6 @@ class GraspCandidate:
         self.is_framein = False
         self.shifted_center = None
         self.elements_score = 0
-        self.center_diff_score = 0
         self.total_score = 0
         self.debug_infos = []
 
@@ -195,7 +194,6 @@ class GraspCandidate:
             self.debug_infos.append(
                 ("center_inside_mask", self.is_center_inside_mask))
             return
-
         self.elements = [
             GraspCandidateElement(
                 hand_radius_px=hand_radius_px, finger_radius_px=finger_radius_px, depth=depth, contour=contour,
@@ -212,7 +210,6 @@ class GraspCandidate:
         if not self.elements_is_valid:
             self.debug_infos.append(("elements_valid", self.elements_is_valid))
             return
-
         # elementの組み合わせ評価
         self.elements_score = self._compute_elements_score()
         if self.elements_score < elements_th:
@@ -220,11 +217,6 @@ class GraspCandidate:
             return
         # contact pointsの中心とマスクの中心のズレの評価
         self.shifted_center = self._compute_contact_points_center()
-        self.center_diff_score = self._compute_center_diff_score()
-        if self.center_diff_score < center_diff_th:
-            self.debug_infos.append(
-                ("center_diff_score", self.center_diff_score))
-            return
         # 各スコアの合算
         self.total_score = self._compute_total_score()
         # すべてのスコアが基準を満たしたときのみvalid判定
@@ -247,13 +239,9 @@ class GraspCandidate:
         min_score = np.min(element_scores)
         return (np.mean(element_scores) - min_score) / (np.max(element_scores) - min_score + 10e-6)
 
-    def _compute_center_diff_score(self) -> float:
-        return (1. - (np.linalg.norm(np.array(self.original_center) - np.array(self.shifted_center), ord=2) / self.hand_radius_px)) ** 2
-        # return 1. - (np.linalg.norm(np.array(self.original_center) - np.array(self.shifted_center), ord=2) / self.bbox_short_radius)
-
     def _compute_total_score(self) -> float:
-        return self.elements_score * self.center_diff_score * self.center_diff_score
-
+        return self.elements_score
+    
     def get_center_uv(self) -> ImagePointUV:
         return self.center
 
@@ -282,7 +270,7 @@ class GraspCandidate:
         return [el.total_score for el in self.elements]
 
     def get_scores(self):
-        return {"elements": self.elements_score, "center_diff": self.center_diff_score}
+        return {"elements": self.elements_score}
 
     def draw(self, img, line_color=(0, 0, 0), line_thickness=1, circle_thickness=1, show_circle=True) -> None:
         for el in self.elements:
@@ -365,7 +353,7 @@ class GraspDetector:
                     center, finger_v)
                 angle = self.unit_angle * i
                 cnd = GraspCandidate(hand_radius_px=hand_radius_px, finger_radius_px=finger_radius_px, angle=angle,
-                                        depth=depth, contour=contour, original_center=center, center=center, insertion_points=insertion_points,
+                                        depth=depth, contour=contour, center=center, insertion_points=insertion_points,
                                         elements_th=self.elements_th, center_diff_th=self.center_diff_th,
                                         el_insertion_th=self.el_insertion_th, el_contact_th=self.el_contact_th,
                                         el_bw_depth_th=self.el_bw_depth_th
@@ -442,77 +430,3 @@ def compute_bw_depth_profile(depth, contact_point, insertion_point):
     valid_values = values[values > 0]
     mean_depth = np.mean(valid_values) if len(valid_values) > 0 else 0
     return min_depth, max_depth, mean_depth
-
-
-def insertion_point_score(min_d: Mm, max_d: Mm, mean_d: Mm) -> float:
-    """
-    not in use now
-    """
-    return ((mean_d - min_d) / (max_d - min_d + 1e-6)) ** 2
-
-
-def evaluate_single_insertion_point(depth: Image, pt: ImagePointUV, finger_radius_px: Px, min_d: Mm, max_d: Mm) -> float:
-    """
-    not in use now
-    """
-    _, _, mean_d = compute_depth_profile_in_finger_area(
-        depth, pt, finger_radius_px)
-    score = insertion_point_score(min_d, max_d, mean_d)
-    return score
-
-
-def compute_contact_point(contour, center, edge, finger_radius):
-    """
-    not in use now
-    """
-    x, y, w, h = cv2.boundingRect(contour)
-    upper_left_point = np.array((x, y))
-    shifted_contour = contour - upper_left_point
-    shifted_center, shifted_edge = [
-        tuple(pt - upper_left_point) for pt in (center, edge)]
-
-    shifted_intersection = compute_intersection_between_contour_and_line(
-        (h, w), shifted_contour, shifted_center, shifted_edge)
-    intersection = tuple(shifted_intersection + upper_left_point)
-
-    direction_v = np.array(edge) - np.array(center)
-    unit_direction_v = direction_v / np.linalg.norm(direction_v, ord=2)
-    # 移動後座標 = 移動元座標 + 方向ベクトル x 移動量(指半径[pixel])
-    contact_point = np.int0(
-        np.round(intersection + unit_direction_v * finger_radius))
-
-    return contact_point
-
-
-def compute_bw_depth_score(depth, contact_point, insertion_point, min_depth):
-    """
-    not in use now
-    """
-    _, max_depth, mean_depth = compute_bw_depth_profile(
-        depth, contact_point, insertion_point)
-    score = max(0, (mean_depth - min_depth)) / (max_depth - min_depth)
-    return score
-
-# def evaluate_insertion_points(depth: Image, candidates: List[np.ndarray], finger_radius_px: Px, min_d: Mm, max_d: Mm) -> List[float]:
-#     scores = []
-#     for points in candidates:
-#         for pt in points:
-#             score = evaluate_single_insertion_point(depth, pt, finger_radius_px, min_d, max_d)
-#             scores.append(score)
-
-#     return scores
-
-
-# def evaluate_single_insertion_points_set(insertion_point_scores):
-#     """ 同じのcandidateに所属するinsertion_pointのスコアの積 """
-#     return np.prod(insertion_point_scores)
-
-
-# def evaluate_insertion_points_set(depth, candidates, radius, min_depth, max_depth):
-#     scores = evaluate_insertion_points(
-#         depth, candidates, radius, min_depth, max_depth)
-#     finger_num = len(candidates[0])
-#     candidates_scores = [evaluate_single_insertion_points_set(
-#         scores[i:i + finger_num]) for i in range(0, len(scores), finger_num)]
-
-#     return candidates_scores
