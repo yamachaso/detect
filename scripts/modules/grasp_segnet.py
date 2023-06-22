@@ -46,6 +46,8 @@ class SegnetInference:
         y = y[0].cpu().detach().numpy().transpose((1, 2, 0))
         y = np.squeeze(y, -1) # (120, 160, 1)から(120, 160)に次元削減
         y_c = y_c[0].cpu().detach().numpy().transpose((1, 2, 0))
+        y = np.clip(y, 0, 1)
+        y_c = np.clip(y_c, 0, 1)
         return y, y_c
 
 class GraspCandidate:
@@ -132,7 +134,7 @@ class GraspDetector:
     def compute_insertion_points(self, center: ImagePointUV, base_finger_v: np.ndarray):
         return self._compute_rotated_points(center, base_finger_v, self.base_angle)
 
-    def detect(self, img: Image, depth: Image, instance_msg: Instance) -> List[GraspCandidate]:
+    def detect(self, img: Image, depth: Image, mask: Image, instance_msg: Instance) -> List[GraspCandidate]:
         # 単位変換
         center = np.array(instance_msg.center)
         center_d = depth[center[1], center[0]]
@@ -144,18 +146,18 @@ class GraspDetector:
         base_finger_v = unit_vector * hand_radius_px  # 単位ベクトル x ハンド半径
 
         y, y_c = self.segnet.predict(img)
-        mask = y * instance_msg.mask
 
+        instance_mask = y * cv2.resize(mask, (160, 120))
         sum_value = np.array([0.0, 0.0, 0.0])
         cnt = np.array([0.0, 0.0, 0.0])
         for i in range(120):
             for j in range(160):
-                sum_value += y_c[i][j] * mask[i][j]
-                cnt += mask[i][j]
+                sum_value += y_c[i][j] * instance_mask[i][j]
+                cnt += instance_mask[i][j]
         sum_value /= cnt
         hi, si, vi = colorsys.rgb_to_hsv(sum_value[0], sum_value[1], sum_value[2])
         #     print(hi, si, vi)
-        anglei = hi * 90
+        anglei = np.int0(np.round(hi * 90)) # int型でないとエラー
         print(f'推論 : {anglei}')
 
         finger_v = np.dot(base_finger_v, self._compute_rmat(anglei)) # TODO 角度

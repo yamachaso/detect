@@ -24,33 +24,6 @@ from sensor_msgs.msg import CameraInfo
 from std_msgs.msg import Header
 
 
-def process_instance_segmentation_result_routine(img, depth, instance_msg, detect_func):
-    instance_center = np.array(instance_msg.center)
-    # bbox_handler = RotatedBoundingBoxHandler(instance_msg.bbox)
-    # contour = multiarray2numpy(int, np.int32, instance_msg.contour)
-    # candidates = detect_func(center=instance_center, depth=depth, contour=contour)
-    candidates = detect_func(img=img, depth=depth, instance_msg=instance_msg)
-
-    return candidates
-
-
-def create_candidates_msg(original_center, valid_candidates, target_index):
-    return Candidates(candidates=[
-        Candidate(
-            PointTuple2D(cnd.get_center_uv()),
-            [PointTuple2D(pt) for pt in cnd.get_insertion_points_uv()],
-            [PointTuple2D(pt) for pt in cnd.get_contact_points_uv()],
-            cnd.total_score,
-            cnd.is_valid
-        )
-        for cnd in valid_candidates
-    ],
-        # bbox=bbox_handler.msg,
-        center=PointTuple2D(original_center),
-        target_index=target_index
-    )
-
-
 class GraspDetectionServer:
     def __init__(self, name: str, finger_num: int, unit_angle: int, hand_radius_mm: int, finger_radius_mm: int,
                  hand_mount_rotation: int, approach_coef: float,
@@ -192,8 +165,8 @@ class GraspDetectionServer:
 
             objects: List[DetectedObject] = []  # 空のものは省く
 
-            # 把持候補の生成 (並列処理)
-            routine_args = []
+            # 把持候補の生成, gpuプログラミングは並列処理できない
+            results = []
             for i in range(len(instances)):
                 # ignore other than instances are located on top of stacks
                 # TODO: しきい値で切り出したマスク内に含まれないインスタンスはスキップ
@@ -201,8 +174,7 @@ class GraspDetectionServer:
                 mask = masks[i]
                 if i not in flont_indexes_set:
                     continue
-                routine_args.append((depth, instance_msg, self.grasp_detector.detect))
-            results = self.pool.starmap(process_instance_segmentation_result_routine, routine_args)
+                results.append(self.grasp_detector.detect(img, depth, mask, instance_msg))
 
             # TODO: 座標変換も並列処理化したい
             for obj_index, candidate in enumerate(results):
