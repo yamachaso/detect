@@ -2,6 +2,7 @@ __pycache__
 .vscode
 detectron_repo
 resources/datasets/*/**
+resources/segnet_datasets/*/**
 resources/samples/realsense_viewer_bags/*
 outputs/**
 
