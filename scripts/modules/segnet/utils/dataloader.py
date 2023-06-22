@@ -2,6 +2,7 @@
 #import os.path as osp
 import os
 from PIL import Image
+import cv2
 import torch.utils.data as data
 
 from modules.segnet.utils.data_augumentation import Compose, Scale, RandomRotation, RandomMirror, Resize, Normalize_Tensor
@@ -161,3 +162,33 @@ class MyDataset_angle(data.Dataset):
         img, anno_color_class_img, anno_mask_class_img = self.transform(self.phase, img, anno_color_class_img, anno_mask_class_img)
 
         return img, anno_color_class_img, anno_mask_class_img
+
+def cv2pil(image):
+    ''' 
+    OpenCV型 -> PIL型 
+    ref: https://qiita.com/derodero24/items/f22c22b22451609908ee
+    '''
+    new_image = image.copy()
+    if new_image.ndim == 2:  # モノクロ
+        pass
+    elif new_image.shape[2] == 3:  # カラー
+        new_image = new_image[:, :, ::-1]
+    elif new_image.shape[2] == 4:  # 透過
+        new_image = new_image[:, :, [2, 1, 0, 3]]
+    new_image = Image.fromarray(new_image)
+    return new_image
+
+def one_img_getitem(img_input, input_size, color_mean, color_std):
+    img = cv2pil(img_input)
+    dummy_anno_color_class_img = cv2pil(img_input)
+    dummy_anno_mask_class_img = cv2pil(img_input)
+    transform = DataTransform_angle(input_size=input_size, color_mean=color_mean, color_std=color_std)
+    img, _, _ = \
+        transform("val", img, dummy_anno_color_class_img, dummy_anno_mask_class_img)
+    return img.unsqueeze(0)
+    
+
+
+
+
+

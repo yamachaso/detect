@@ -6,6 +6,7 @@ DATASETS_PATH = f"{ROOT_PATH}/resources/datasets"
 CONFIGS_PATH = f"{ROOT_PATH}/resources/configs"
 SAMPLES_PATH = f"{ROOT_PATH}/resources/samples"
 SEGNET_DATASETS_PATH = f"{ROOT_PATH}/resources/segnet_datasets"
+WIGHTS_DIR = f"{OUTPUTS_PATH}/segnet_weights"
 
 
 UINT16MAX = 2 ** 16

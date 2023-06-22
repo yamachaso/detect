@@ -12,7 +12,7 @@ from detect.msg import (Candidate, Candidates, DetectedObject,
                         GraspDetectionAction, GraspDetectionDebugInfo,
                         GraspDetectionGoal, GraspDetectionResult, PointTuple2D)
 from geometry_msgs.msg import Point, Pose, PoseStamped
-from modules.grasp import GraspDetector
+from modules.grasp_segnet import GraspDetector
 from modules.image import extract_flont_mask_with_thresh, extract_flont_instance_indexes, merge_mask
 from modules.visualize import convert_rgb_to_3dgray
 from modules.ros.action_clients import (ComputeDepthThresholdClient,
@@ -24,13 +24,14 @@ from sensor_msgs.msg import CameraInfo
 from std_msgs.msg import Header
 
 
-def process_instance_segmentation_result_routine(depth, instance_msg, detect_func):
+def process_instance_segmentation_result_routine(img, depth, instance_msg, detect_func):
     instance_center = np.array(instance_msg.center)
-    bbox_handler = RotatedBoundingBoxHandler(instance_msg.bbox)
-    contour = multiarray2numpy(int, np.int32, instance_msg.contour)
-    candidates = detect_func(center=instance_center, depth=depth, contour=contour)
+    # bbox_handler = RotatedBoundingBoxHandler(instance_msg.bbox)
+    # contour = multiarray2numpy(int, np.int32, instance_msg.contour)
+    # candidates = detect_func(center=instance_center, depth=depth, contour=contour)
+    candidates = detect_func(img=img, depth=depth, instance_msg=instance_msg)
 
-    return (candidates, instance_center, bbox_handler)
+    return candidates
 
 
 def create_candidates_msg(original_center, valid_candidates, target_index):
@@ -190,7 +191,6 @@ class GraspDetectionServer:
             flont_indexes_set = set(flont_indexes)
 
             objects: List[DetectedObject] = []  # 空のものは省く
-            candidates_list: List[Candidates] = []  # 空のものも含む
 
             # 把持候補の生成 (並列処理)
             routine_args = []
@@ -205,54 +205,28 @@ class GraspDetectionServer:
             results = self.pool.starmap(process_instance_segmentation_result_routine, routine_args)
 
             # TODO: 座標変換も並列処理化したい
-            for obj_index, (candidates, instance_center, bbox_handler) in enumerate(results):
-                if len(candidates) == 0:
-                    continue
-                # select best candidate
-                valid_candidates = [cnd for cnd in candidates if cnd.is_valid] if enable_candidate_filter else candidates
-                is_valid = len(valid_candidates) > 0
-                valid_scores = [cnd.total_score for cnd in valid_candidates]
-                target_index = np.argmax(valid_scores) if is_valid else 0
-
-                # candidates_list は可視化用に空のものも含む
-                candidates_list.append(create_candidates_msg(instance_center, valid_candidates, target_index))
-
-                # TODO: is_frameinの判定冗長なので要整理
-                include_any_frameout = not np.any([cnd.is_framein for cnd in valid_candidates])
-                if include_any_frameout or not is_valid:
-                    continue
-
-                best_cand = valid_candidates[target_index]
+            for obj_index, candidate in enumerate(results):
                 # 3d projection
-                insertion_points_c = [self.projector.screen_to_camera_2(points_msg, uv) for uv in best_cand.get_insertion_points_uv()]
-                c_3d_c_on_surface = self.projector.screen_to_camera_2(points_msg, best_cand.get_center_uv())
-                # insertion_points_c = [self.projector.screen_to_camera(uv, d_mm) for uv, d_mm in best_cand.get_insertion_points_uvd()]
-                # c_3d_c_on_surface = self.projector.screen_to_camera(*best_cand.get_center_uvd())
+                insertion_points_c = [self.projector.screen_to_camera_2(points_msg, uv) for uv in candidate.get_insertion_points_uv()]
+                c_3d_c_on_surface = self.projector.screen_to_camera_2(points_msg, candidate.get_center_uv())
                 # compute approach distance
                 length_to_center = self.compute_approach_distance(c_3d_c_on_surface, insertion_points_c)
-                # compute center pose stamped (world coords)
-                insertion_points_msg = [pt.point for pt in self.tf_client.transform_points(header, insertion_points_c)]
                 center_pose_stamped_msg = self.compute_object_center_pose_stampd(depth, mask, c_3d_c_on_surface, header)
-                # compute 3d radiuses
-                short_radius_3d, long_radius_3d = self.compute_object_3d_radiuses(depth, bbox_handler)
-                angle = best_cand.angle - self.hand_mount_rotation
+                angle = candidate.angle - self.hand_mount_rotation
                 # 絶対値が最も小さい角度
                 nearest_angle = self.augment_angles(angle)[0]
                 objects.append(DetectedObject(
-                    points=insertion_points_msg,
-                    center_pose=center_pose_stamped_msg,
-                    angle=nearest_angle,
-                    short_radius=short_radius_3d,
-                    long_radius=long_radius_3d,
-                    length_to_center=length_to_center,
-                    score=best_cand.total_score,
+                    # points=insertion_points_msg,
+                    center_pose=center_pose_stamped_msg, # yes
+                    angle=nearest_angle, # yes
+                    # short_radius=short_radius_3d,
+                    # long_radius=long_radius_3d,
+                    length_to_center=length_to_center, # yes
+                    score=candidate.total_score, # yes
                     index=obj_index  # for visualize
                 )
                 )
 
-            self.visualize_client.visualize_candidates(vis_base_img_msg, candidates_list)
-            if self.dbg_info_publisher:
-                self.dbg_info_publisher.publish(GraspDetectionDebugInfo(header, candidates_list))
             spent = time() - start_time
             print(f"stamp: {stamp.to_time()}, spent: {spent:.3f}, objects: {len(objects)} ({len(instances)})")
             self.server.set_succeeded(GraspDetectionResult(header, objects))
@@ -281,7 +255,7 @@ if __name__ == "__main__":
     debug = rospy.get_param("debug")
 
     GraspDetectionServer(
-        "grasp_detection_server2",
+        "grasp_detection_server",
         finger_num=finger_num,
         unit_angle=unit_angle,
         hand_radius_mm=hand_radius_mm,
