@@ -80,14 +80,13 @@ unit_angle = 15
 frame_size = img.shape[:2]
 fp = handler.fp
 elements_th = 0
-center_diff_th = 0
 el_insertion_th = 0
 el_contact_th = 0
 el_bw_depth_th = 0
 detector = GraspDetector(finger_num=finger_num, hand_radius_mm=hand_radius_mm,
                          finger_radius_mm=finger_radius_mm,
                          unit_angle=unit_angle, frame_size=frame_size, fp=fp,
-                         elements_th=elements_th, center_diff_th=center_diff_th,
+                         elements_th=elements_th, 
                          el_insertion_th=el_insertion_th, el_contact_th=el_contact_th,
                          el_bw_depth_th=el_bw_depth_th)
 # %%

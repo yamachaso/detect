@@ -199,7 +199,6 @@ if __name__ == "__main__":
     hand_mount_rotation = rospy.get_param("hand_mount_rotation")
     approach_coef = rospy.get_param("approach_coef")
     elements_th = rospy.get_param("elements_th")
-    center_diff_th = rospy.get_param("center_diff_th")
     el_insertion_th = rospy.get_param("el_insertion_th")
     el_contact_th = rospy.get_param("el_contact_th")
     el_bw_depth_th = rospy.get_param("el_bw_depth_th")

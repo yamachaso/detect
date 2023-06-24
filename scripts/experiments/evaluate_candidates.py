@@ -538,7 +538,7 @@ def new_sub_task(contour, center, candidate):
         hand_radius_px=hand_radius, finger_radius_px=finger_radius,
         angle=0, depth=depth, contour=contour, original_center=center,
         center=center, insertion_points=candidate,
-        elements_th=0, center_diff_th=0,
+        elements_th=0,
         el_insertion_th=0.2, el_contact_th=0.2,
         el_bw_depth_th=0.2)
 

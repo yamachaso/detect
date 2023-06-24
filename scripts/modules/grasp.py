@@ -228,7 +228,7 @@ class GraspCandidateElement:
 class GraspCandidate:
     def __init__(self, hand_radius_px, finger_radius_px, angle, depth, contour,
                  center, insertion_points,
-                 elements_th, center_diff_th, el_insertion_th, el_contact_th, el_bw_depth_th):
+                 elements_th, el_insertion_th, el_contact_th, el_bw_depth_th):
         self.hand_radius_px = hand_radius_px
         self.finger_radius_px = finger_radius_px
         self.angle = angle
@@ -339,12 +339,11 @@ class GraspDetector:
     # TODO: hand_radiusの追加
     def __init__(self, finger_num: int, hand_radius_mm: Mm, finger_radius_mm: Mm, unit_angle: int,
                  frame_size: Tuple[int, int], fp: float,
-                 elements_th: float = 0., center_diff_th: float = 0.,
-                 el_insertion_th: float = 0.5, el_contact_th: float = 0.5, el_bw_depth_th: float = 0.):
+                 elements_th: float = 0., el_insertion_th: float = 0.5, 
+                 el_contact_th: float = 0.5, el_bw_depth_th: float = 0.):
         self.finger_num = finger_num
         self.unit_angle = unit_angle  # 生成される把持候補の回転の刻み角
         self.elements_th = elements_th
-        self.center_diff_th = center_diff_th
         self.el_insertion_th = el_insertion_th
         self.el_contact_th = el_contact_th
         self.el_bw_depth_th = el_bw_depth_th
@@ -408,9 +407,8 @@ class GraspDetector:
                 angle = self.unit_angle * i
                 cnd = GraspCandidate(hand_radius_px=hand_radius_px, finger_radius_px=finger_radius_px, angle=angle,
                                         depth=depth, contour=contour, center=center, insertion_points=insertion_points,
-                                        elements_th=self.elements_th, center_diff_th=self.center_diff_th,
-                                        el_insertion_th=self.el_insertion_th, el_contact_th=self.el_contact_th,
-                                        el_bw_depth_th=self.el_bw_depth_th
+                                        elements_th=self.elements_th, el_insertion_th=self.el_insertion_th, 
+                                        el_contact_th=self.el_contact_th, el_bw_depth_th=self.el_bw_depth_th
                                         )
                 candidates.append(cnd)
 

@@ -53,7 +53,7 @@ def create_candidates_msg(original_center, valid_candidates, target_index):
 class GraspDetectionServer:
     def __init__(self, name: str, finger_num: int, unit_angle: int, hand_radius_mm: int, finger_radius_mm: int,
                  hand_mount_rotation: int, approach_coef: float,
-                 elements_th: float, center_diff_th: float, el_insertion_th: float, el_contact_th: float, el_bw_depth_th: float,
+                 elements_th: float, el_insertion_th: float, el_contact_th: float, el_bw_depth_th: float,
                  info_topic: str, enable_depth_filter: bool, enable_candidate_filter: bool, debug: bool):
         rospy.init_node(name, log_level=rospy.INFO)
 
@@ -65,7 +65,6 @@ class GraspDetectionServer:
         self.hand_mount_rotation = hand_mount_rotation
         self.approach_coef = approach_coef
         self.elements_th = elements_th
-        self.center_diff_th = center_diff_th
         self.el_insertion_th = el_insertion_th
         self.el_contact_th = el_contact_th
         self.el_bw_depth_th = el_bw_depth_th
@@ -94,9 +93,8 @@ class GraspDetectionServer:
         self.grasp_detector = GraspDetector(finger_num=finger_num, hand_radius_mm=hand_radius_mm,
                                             finger_radius_mm=finger_radius_mm,
                                             unit_angle=unit_angle, frame_size=frame_size, fp=fp,
-                                            elements_th=elements_th, center_diff_th=center_diff_th,
-                                            el_insertion_th=el_insertion_th, el_contact_th=el_contact_th,
-                                            el_bw_depth_th=el_bw_depth_th)
+                                            elements_th=elements_th, el_insertion_th=el_insertion_th, 
+                                            el_contact_th=el_contact_th, el_bw_depth_th=el_bw_depth_th)
 
         self.pool = Pool(100)
 
@@ -263,7 +261,6 @@ if __name__ == "__main__":
     hand_mount_rotation = rospy.get_param("hand_mount_rotation")
     approach_coef = rospy.get_param("approach_coef")
     elements_th = rospy.get_param("elements_th")
-    center_diff_th = rospy.get_param("center_diff_th")
     el_insertion_th = rospy.get_param("el_insertion_th")
     el_contact_th = rospy.get_param("el_contact_th")
     el_bw_depth_th = rospy.get_param("el_bw_depth_th")
@@ -281,7 +278,6 @@ if __name__ == "__main__":
         hand_mount_rotation=hand_mount_rotation,
         approach_coef=approach_coef,
         elements_th=elements_th,
-        center_diff_th=center_diff_th,
         el_insertion_th=el_insertion_th,
         el_contact_th=el_contact_th,
         el_bw_depth_th=el_bw_depth_th,
