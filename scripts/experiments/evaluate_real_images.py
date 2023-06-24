@@ -17,7 +17,7 @@ from utils import RealsenseBagHandler, imshow
 
 # %%
 config_path = f"{CONFIGS_PATH}/config.yaml"
-weight_path = f"{OUTPUTS_PATH}/2022_10_16_08_01/model_final.pth"
+weight_path = f"{OUTPUTS_PATH}/mask_rcnn/model_final.pth"
 device = "cuda:0"
 
 print(config_path)
@@ -89,8 +89,7 @@ detector = GraspDetector(finger_num=finger_num, hand_radius_mm=hand_radius_mm,
                          unit_angle=unit_angle, frame_size=frame_size, fp=fp,
                          elements_th=elements_th, center_diff_th=center_diff_th,
                          el_insertion_th=el_insertion_th, el_contact_th=el_contact_th,
-                         el_bw_depth_th=el_bw_depth_th,
-                         augment_anchors=True)
+                         el_bw_depth_th=el_bw_depth_th)
 # %%
 
 

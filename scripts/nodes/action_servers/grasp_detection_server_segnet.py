@@ -206,8 +206,6 @@ if __name__ == "__main__":
     info_topic = rospy.get_param("image_info_topic")
     enable_depth_filter = rospy.get_param("enable_depth_filter")
     enable_candidate_filter = rospy.get_param("enable_candidate_filter")
-    augment_anchors = rospy.get_param("augment_anchors")
-    angle_for_augment = rospy.get_param("angle_for_augment")
     debug = rospy.get_param("debug")
 
     GraspDetectionServer(

@@ -54,9 +54,7 @@ class GraspDetectionServer:
     def __init__(self, name: str, finger_num: int, unit_angle: int, hand_radius_mm: int, finger_radius_mm: int,
                  hand_mount_rotation: int, approach_coef: float,
                  elements_th: float, center_diff_th: float, el_insertion_th: float, el_contact_th: float, el_bw_depth_th: float,
-                 info_topic: str, enable_depth_filter: bool, enable_candidate_filter: bool,
-                 augment_anchors: bool, angle_for_augment: int,
-                 debug: bool):
+                 info_topic: str, enable_depth_filter: bool, enable_candidate_filter: bool, debug: bool):
         rospy.init_node(name, log_level=rospy.INFO)
 
         self.finger_num = finger_num
@@ -72,8 +70,6 @@ class GraspDetectionServer:
         self.el_contact_th = el_contact_th
         self.el_bw_depth_th = el_bw_depth_th
         self.enable_candidate_filter = enable_candidate_filter
-        self.augment_anchors = augment_anchors
-        self.angle_for_augment = angle_for_augment
         self.debug = debug
         cam_info: CameraInfo = rospy.wait_for_message(info_topic, CameraInfo, timeout=None)
         frame_size = (cam_info.height, cam_info.width)
@@ -100,9 +96,7 @@ class GraspDetectionServer:
                                             unit_angle=unit_angle, frame_size=frame_size, fp=fp,
                                             elements_th=elements_th, center_diff_th=center_diff_th,
                                             el_insertion_th=el_insertion_th, el_contact_th=el_contact_th,
-                                            el_bw_depth_th=el_bw_depth_th,
-                                            augment_anchors=augment_anchors,
-                                            angle_for_augment=angle_for_augment)
+                                            el_bw_depth_th=el_bw_depth_th)
 
         self.pool = Pool(100)
 
@@ -276,8 +270,6 @@ if __name__ == "__main__":
     info_topic = rospy.get_param("image_info_topic")
     enable_depth_filter = rospy.get_param("enable_depth_filter")
     enable_candidate_filter = rospy.get_param("enable_candidate_filter")
-    augment_anchors = rospy.get_param("augment_anchors")
-    angle_for_augment = rospy.get_param("angle_for_augment")
     debug = rospy.get_param("debug")
 
     GraspDetectionServer(
@@ -296,8 +288,6 @@ if __name__ == "__main__":
         info_topic=info_topic,
         enable_depth_filter=enable_depth_filter,
         enable_candidate_filter=enable_candidate_filter,
-        augment_anchors=augment_anchors,
-        angle_for_augment=angle_for_augment,
         debug=debug
     )
     rospy.spin()

@@ -46,8 +46,7 @@ if __name__ == "__main__":
     seg_topic = rospy.get_param("seg_topic")
 
     config_path = rospy.get_param("config", f"{CONFIGS_PATH}/config.yaml")
-    # weight_path = rospy.get_param("weight", f"{OUTPUTS_PATH}/2022_08_04_07_40/model_final.pth")
-    weight_path = rospy.get_param("weight", f"{OUTPUTS_PATH}/2022_10_16_08_01/model_final.pth")
+    weight_path = rospy.get_param("weight", f"{OUTPUTS_PATH}/mask_rcnn/model_final.pth")
     device = rospy.get_param("device", "cuda:0")
 
     cfg = get_cfg()

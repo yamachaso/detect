@@ -19,9 +19,6 @@
     <arg name="el_contact_th" default="0.2" />
     <arg name="el_bw_depth_th" default="0.2" />
 
-    <arg name="augment_anchors" default="true" />
-    <arg name="angle_for_augment" default="15" />
-
     <arg name="robot_name" default="myrobot" />
     <arg name="debug" default="false" />
     <arg name="visualize_only_best_cnd" default="false" />
@@ -61,9 +58,6 @@
     <param name="el_insertion_th" value="$(arg el_insertion_th)" />
     <param name="el_contact_th" value="$(arg el_contact_th)" />
     <param name="el_bw_depth_th" value="$(arg el_bw_depth_th)" />
-    
-    <param name="augment_anchors" value="$(arg augment_anchors)" />
-    <param name="angle_for_augment" value="$(arg angle_for_augment)" />
     
     <param name="robot_name" value="$(arg robot_name)" />
     <param name="debug" value="$(arg debug)" />
