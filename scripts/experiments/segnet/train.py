@@ -287,6 +287,8 @@ plt.imshow(anno_mask_class_img, cmap = "gray")
 plt.show()
 
 
+print(WIGHTS_DIR)
+
 # 3. PSPNetで推論する
 state_dict = torch.load(f"{WIGHTS_DIR}/segnetbasic_10000.pth")
 net = SegNetBasicVer2()
@@ -414,3 +416,38 @@ import colorsys
 h, s, v = colorsys.rgb_to_hsv(sum_value[0], sum_value[1], sum_value[2])
 print(h, s, v)
 print(f'h : {h * 90}')
+# %%
+radius = 50
+line_color = (120, 20, 30)
+line_width = 4
+circle_color = (230, 10, 240)
+circle_size = 3
+circle_width = 3
+
+def draw_batten(src_img, stats, centroids, angle):
+    maxv, maxi = max_area(stats)
+    result_img = src_img.copy()    
+    coordinate = centroids[maxi]
+    x, y = (int(coordinate[0]), int(coordinate[1]))
+
+    angle_r = np.deg2rad(angle)
+    x1, y1 = x+int(radius*np.cos(angle_r)), y-int(radius*np.sin(angle_r))
+    x2, y2 = x-int(radius*np.cos(angle_r)), y+int(radius*np.sin(angle_r))
+    cv2.line(result_img, (x1, y1), (x2, y2), line_color, line_width)
+    cv2.circle(result_img, (x1, y1), circle_width, circle_color, circle_width)
+    cv2.circle(result_img, (x2, y2), circle_width, circle_color, circle_width)
+
+    angle_r = np.deg2rad(angle+90)
+    x1, y1 = x+int(radius*np.cos(angle_r)), y-int(radius*np.sin(angle_r))
+    x2, y2 = x-int(radius*np.cos(angle_r)), y+int(radius*np.sin(angle_r))
+    cv2.line(result_img, (x1, y1), (x2, y2), line_color, line_width)
+    cv2.circle(result_img, (x1, y1), circle_width, circle_color, circle_width)
+    cv2.circle(result_img, (x2, y2), circle_width, circle_color, circle_width)
+    
+    
+    return result_img
+
+src_img = cv2.resize(cv2.imread(test_img_list[img_index]), dsize=(160, 120))
+img = draw_batten(src_img, stats, centroids, h * 90)
+plt.imshow(img)
+plt.show()

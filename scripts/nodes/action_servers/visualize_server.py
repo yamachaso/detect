@@ -66,6 +66,8 @@ class VisualizeServer:
         self.publisher.publish(res_img, frame_id, stamp)
 
     def draw_target(self, goal: VisualizeTargetGoal):
+        if self.last_image is None:
+            return
         """ 一度candidatesを描画した後に使用すること """
         print(f"candidates_list: {len(self.last_candidates_list)}, target: {goal.target_index}")
         if type(self.last_image) is not None:
