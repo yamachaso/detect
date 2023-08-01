@@ -293,8 +293,13 @@ class GraspCandidate:
         element_scores = self.get_element_scores()
         # return np.prod(element_scores)
         # return np.mean(element_scores) * (np.min(element_scores) / np.max(element_scores))
-        min_score = np.min(element_scores)
-        return (np.mean(element_scores) - min_score) / (np.max(element_scores) - min_score + 10e-6)
+        
+        # min_score = np.min(element_scores)
+        # return (np.mean(element_scores) - min_score) / (np.max(element_scores) - min_score + 10e-6)
+        
+        # マクシミン的な戦略
+        # スコアの悪い指が含まれない把持候補を選択したいので、各候補の最悪な指のスコアを比較する。
+        return np.min(element_scores) # マクシミン的な戦略
 
     def _compute_total_score(self) -> float:
         return self.elements_score
