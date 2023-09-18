@@ -64,7 +64,7 @@ class InstanceSegmentationClient(SimpleActionClient):
 
 
 class GraspDetectionClient(SimpleActionClient):
-    def __init__(self, ns="grasp_detection_server", ActionSpec=GraspDetectionAction):
+    def __init__(self, ns="detect_server", ActionSpec=GraspDetectionAction):
         super().__init__(ns, ActionSpec)
         self.stack = []
         self.wait_for_server()

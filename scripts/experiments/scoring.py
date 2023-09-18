@@ -1,11 +1,161 @@
 # %%
+from typing import List, Tuple, Union
+
+import cv2
+import numpy as np
+from torch import Tensor
+
+class BinaryMask:
+    """
+    mask: 1 or 255, (n, h, w)
+    contour: used to calculate other values
+    """
+
+    def __init__(self, mask: Union[np.ndarray, Tensor]):
+        self.mask: np.ndarray = np.asarray(mask, dtype=np.uint8)
+        self.contour = self._compute_contour()
+
+    # private
+    def _compute_contour(self):
+        contours, _ = cv2.findContours(
+            self.mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+        if len(contours) > 1:
+            contour = max(contours, key=lambda x: cv2.contourArea(x))
+        else:
+            contour = contours[0]
+
+        return contour
+    
+    def get_contour(self):
+        return self.contour
+
+    def get_center(self):
+        mu = cv2.moments(self.contour)
+        center = np.array([int(mu["m10"] / mu["m00"]), int(mu["m01"] / mu["m00"])])
+        return np.int0(np.rint(center))
+
+    def get_rotated_bbox(self):
+        # (upper_left, upper_right, lower_right, lower_left)
+        return np.int0(np.rint(cv2.boxPoints(cv2.minAreaRect(self.contour))))
+
+    def get_area(self):
+        return cv2.contourArea(self.contour)
+
+# %%
+from typing import Any, Tuple, TypedDict, Union
+
+import cv2
+import numpy as np
+from detectron2.engine import DefaultPredictor
+from detectron2.structures import Boxes
+from detectron2.structures import Instances as RawInstances
+from detectron2.utils.visualizer import ColorMode, Visualizer
+from modules.utils import smirnov_grubbs
+from torch import Tensor
+
+from entities.image import BinaryMask
+
+
+class Instances(RawInstances):
+    """predict完了して各値がセットされた後のInstances(type指定用)"""
+
+    def __init__(self, image_size: Tuple[int, int], **kwargs: Any):
+        super().__init__(image_size, **kwargs)
+        # self.boxes: Boxes
+        self.pred_boxes: Boxes
+        self.pred_masks: Tensor
+        self.scores: Tensor
+        self.pred_classes: Tensor
+
+    # 戻り値の型を上書きするためにオーバーライド
+    def to(self, *args: Any, **kwargs: Any) -> "Instances":
+        super().to(*args, **kwargs)
+
+
+class OutputsDictType(TypedDict):
+    instances: Instances
+
+
+class PredictResult:
+    """detecton2のpredictの出力を扱いやすい形にパースする"""
+
+    def __init__(self, outputs_dict: OutputsDictType, device: str = "cpu"):
+        self._instances: Instances = outputs_dict['instances'].to(device)
+
+        self.boxes: np.ndarray = self._instances.pred_boxes.tensor.numpy()
+
+        self.scores: np.ndarray = self._instances.scores.numpy()
+        self.labels: np.ndarray = self._instances.pred_classes.numpy()
+
+        # uint8 : 0 ~ 255
+        mask_array: np.ndarray = self._instances.pred_masks.numpy().astype("uint8")
+
+
+        # rotated_bboxの形式は(center, weight, height, angle)の方がよい？
+        # radiusも返すべき？
+        # contourはどうやってｍｓｇに渡す？
+        masks = []
+        contours = []
+        centers = []
+        bboxes = []
+        areas = []
+        for each_mask_array in mask_array:
+            each_mask = BinaryMask(each_mask_array)
+            closing_mask = cv2.morphologyEx(
+                each_mask.mask, cv2.MORPH_CLOSE, np.ones((10, 10), np.uint8))
+            masks.append(closing_mask)
+            contours.append(each_mask.get_contour())
+            centers.append(each_mask.get_center())
+            bboxes.append(each_mask.get_rotated_bbox())
+            areas.append(each_mask.get_area())
+
+        # NMSで除去できない不良インスタンスの除去
+        outlier_indexes = smirnov_grubbs(areas, 0.05)
+        print(outlier_indexes)
+        valid_indexes = [i for i in range(
+            mask_array.shape[0]) if i not in outlier_indexes]
+
+        self.instances = self._instances[valid_indexes]
+        self.num_instances = len(self.instances)
+        self.masks = np.array(masks)[valid_indexes]
+        self.contours = np.array(contours)[valid_indexes]
+        self.centers = np.array(centers)[valid_indexes]
+        self.bboxes = np.array(bboxes)[valid_indexes]
+        self.areas = np.array(areas)[valid_indexes]
+
+    def draw_instances(self, img, metadata={}, scale=0.5, instance_mode=ColorMode.IMAGE_BW, targets: Union[list, np.ndarray, None] = None):
+        v = Visualizer(
+            img,
+            metadata=metadata,
+            scale=scale,
+            # remove the colors of unsegmented pixels.
+            # This option is only available for segmentation models
+            instance_mode=instance_mode
+        )
+        instances = self.instances if targets is None else self.instances[targets]
+        return v.draw_instance_predictions(instances).get_image()[:, :, ::-1]
+
+
+# これは別の場所に置くべきでは
+class Predictor:
+    def __init__(self, cfg):
+        self.cfg = cfg
+        self.predictor = DefaultPredictor(self.cfg)
+
+    def predict(self, img):
+        outputs = self.predictor(img)
+        parsed_outputs = PredictResult(outputs)
+        return parsed_outputs
+
+
+
+# %%
 from glob import glob
 
 import cv2
 import matplotlib.pyplot as plt
 import numpy as np
 from detectron2.config import get_cfg
-from entities.predictor import Predictor
 from modules.const import CONFIGS_PATH, OUTPUTS_PATH, SAMPLES_PATH
 from modules.grasp import GraspDetector
 from modules.image import (compute_optimal_depth_thresh,
@@ -39,7 +189,7 @@ print(img.dtype, depth.dtype)
 fig, axes = plt.subplots(1, 2)
 axes[0].imshow(img)
 axes[1].imshow(depth, cmap="binary")
-cv2.imwrite('after_Lena.jpg', img)
+# cv2.imwrite('after_Lena.jpg', img)
 depth.shape
 # %%
 res = predictor.predict(img)
@@ -47,9 +197,13 @@ seg = res.draw_instances(img[:, :, ::-1])
 imshow(seg)
 
 # %%
-print(len(res.instances))
-print(res.instances)
-print(res.num_instances)
+fig, axes = plt.subplots(1, 2)
+axes[0].imshow(img)
+axes[1].imshow(depth)
+print(img.max(), img.min())
+print(depth.max(), depth.min())
+# axes[1].imshow(depth, cmap="binary")
+# axes[1].imshow(depth, cmap="binary")
 
 # %%
 masks = res.masks
@@ -163,3 +317,5 @@ test_image= cv2.ellipse(test_image,ellipse,(0,255,0),2)
 imshow(test_image)
 # plt.imshow(test_image)
 # %%
+
+

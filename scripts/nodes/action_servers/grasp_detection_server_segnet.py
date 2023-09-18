@@ -208,7 +208,7 @@ if __name__ == "__main__":
     debug = rospy.get_param("debug")
 
     GraspDetectionServer(
-        "grasp_detection_server",
+        "detect_server",
         finger_num=finger_num,
         hand_radius_mm=hand_radius_mm,
         finger_radius_mm=finger_radius_mm,

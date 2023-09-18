@@ -3,8 +3,6 @@ from multiprocessing import Pool
 from time import time
 from typing import List
 
-import os
-from datetime import datetime
 import cv2
 import numpy as np
 import rospy
@@ -12,10 +10,9 @@ from actionlib import SimpleActionServer
 from cv_bridge import CvBridge
 from detect.msg import (Candidate, Candidates, DetectedObject,
                         GraspDetectionAction, GraspDetectionDebugInfo,
-                        GraspDetectionGoal, GraspDetectionResult, PointTuple2D, 
-                        CalcurateInsertionAction, CalcurateInsertionGoal, CalcurateInsertionResult)
+                        GraspDetectionGoal, GraspDetectionResult, PointTuple2D)
 from geometry_msgs.msg import Point, Pose, PoseStamped
-from modules.grasp import GraspDetector, InsertionCalculator
+from modules.grasp import GraspDetector
 from modules.image import extract_flont_mask_with_thresh, extract_flont_instance_indexes, merge_mask
 from modules.visualize import convert_rgb_to_3dgray
 from modules.ros.action_clients import (ComputeDepthThresholdClient,
@@ -25,9 +22,6 @@ from modules.ros.msg_handlers import RotatedBoundingBoxHandler
 from modules.ros.utils import PointProjector, PoseEstimator, multiarray2numpy
 from sensor_msgs.msg import CameraInfo
 from std_msgs.msg import Header
-from modules.ros.publishers import ImageMatPublisher
-
-from modules.const import CONFIGS_PATH, DATASETS_PATH, OUTPUTS_PATH
 
 
 def process_instance_segmentation_result_routine(depth, instance_msg, detect_func):
@@ -102,23 +96,10 @@ class GraspDetectionServer:
                                             elements_th=elements_th, el_insertion_th=el_insertion_th, 
                                             el_contact_th=el_contact_th, el_bw_depth_th=el_bw_depth_th)
 
-        self.insertion_calculator = InsertionCalculator(finger_num=finger_num, hand_radius_mm=hand_radius_mm,
-                                            finger_radius_mm=finger_radius_mm,
-                                            unit_angle=unit_angle, frame_size=frame_size, fp=fp)
-
-
         self.pool = Pool(100)
 
         self.server = SimpleActionServer(name, GraspDetectionAction, self.callback, False)
-        self.server2 = SimpleActionServer('calcurate_insertion_server', CalcurateInsertionAction, self.callback2, False)
         self.server.start()
-        self.server2.start()
-
-        self.count = 0
-        self.now = datetime.now().strftime('%Y-%m-%d-%H-%M-%S')
-        self.result_publisher = ImageMatPublisher("/result", queue_size=10)
-        self.result2_publisher = ImageMatPublisher("/result2", queue_size=10)
-        rospy.logwarn("finished detection server constructor")
 
     def depth_filtering(self, img_msg, depth_msg, img, depth, masks, thresh=0.5, n=5):
         vis_base_img_msg = img_msg
@@ -248,8 +229,7 @@ class GraspDetectionServer:
                 short_radius_3d, long_radius_3d = self.compute_object_3d_radiuses(depth, bbox_handler)
                 angle = best_cand.angle - self.hand_mount_rotation
                 # 絶対値が最も小さい角度
-                # nearest_angle = self.augment_angles(angle)[0]
-                nearest_angle = 0
+                nearest_angle = self.augment_angles(angle)[0]
                 objects.append(DetectedObject(
                     points=insertion_points_msg,
                     center_pose=center_pose_stamped_msg,
@@ -272,85 +252,6 @@ class GraspDetectionServer:
         except Exception as err:
             rospy.logerr(err)
 
-    def convert_mm_to_pascal(self, r):
-        # TODO
-        return 0.5 
-
-    def callback2(self, goal: CalcurateInsertionGoal):
-        print("callback2 called")
-        img_msg = goal.image
-        depth_msg = goal.depth
-        points_msg = goal.points
-        frame_id = img_msg.header.frame_id
-        stamp = img_msg.header.stamp
-        header = Header(frame_id=frame_id, stamp=stamp)
-        try:
-            start_time = time()
-            img = self.bridge.imgmsg_to_cv2(img_msg)
-            depth = self.bridge.imgmsg_to_cv2(depth_msg)
-            instances = self.is_client.predict(img_msg) # List[Instance]
-            # TODO: depthしきい値を求めるためにmerged_maskが必要だが非効率なので要改善
-            # print(instances[0].contour)
-            print(type(instances[0].contour))
-            contours = np.array([multiarray2numpy(int, np.int32, instance_msg.contour) for instance_msg in instances])
-            centers = np.array([np.array(instance_msg.center) for instance_msg in instances])
-
-            ic_result = self.insertion_calculator.calculate(depth, contours, centers)
-
-            x, y, t, r, d = ic_result
-            img_result = self.insertion_calculator.drawResult(img.copy(), contours, x, y, t, r, d)
-
-            frame_id = img_msg.header.frame_id
-            stamp = img_msg.header.stamp
-
-            self.result_publisher.publish(img_result, frame_id, stamp)
-            
-            depth_tmp = depth.copy()
-            depth_tmp[depth_tmp > 1000] = 1000
-            depth_img = (depth_tmp / depth_tmp.max() * 255).astype(np.uint8)
-            depth_img = cv2.cvtColor(depth_img, cv2.COLOR_GRAY2RGB)
-            img_result2 = self.grasp_detector.drawResult(depth_img, depth, x, y, t, r)
-
-            self.result2_publisher.publish(img_result2, frame_id, stamp)
-
-            
-            OUTPUT_DIR = f"{OUTPUTS_PATH}/tmp/{self.now}"
-            print(OUTPUT_DIR)
-            os.makedirs(OUTPUT_DIR, exist_ok=True)
-            os.makedirs(f"{OUTPUT_DIR}/color", exist_ok=True)
-            os.makedirs(f"{OUTPUT_DIR}/depth", exist_ok=True)
-            # print(f'{OUTPUT_DIR}/color/{self.count}.jpg')
-            cv2.imwrite(f'{OUTPUT_DIR}/color/{self.count}.jpg', img_result)
-            cv2.imwrite(f'{OUTPUT_DIR}/depth/{self.count}.jpg', img_result2)
-            self.count += 1
- 
-            print("insertion x y :", x, y)
-            c_3d_c_on_surface = self.projector.screen_to_camera_2(points_msg, (x, y))
-
-            print("c_3d_c_on_surface :", c_3d_c_on_surface)
-
-
-            point_msg = self.tf_client.transform_point(header, c_3d_c_on_surface)
-
-            pose_msg = Pose(
-                position=point_msg.point
-            )
-  
-            # angle = t
-            angle = int(np.rad2deg(t)) - self.hand_mount_rotation
-            # 絶対値が最も小さい角度
-            nearest_angle = self.augment_angles(angle)[0]
-
-            pressure = self.convert_mm_to_pascal(r)
-
-            spent = time() - start_time
-            # print(f"stamp: {stamp.to_time()}, spent: {spent:.3f}, objects: {len(objects)} ({len(instances)})")
-            print(f"stamp: {stamp.to_time()}, spent: {spent:.3f}, angle: {nearest_angle}")
-            self.server2.set_succeeded(CalcurateInsertionResult(pose_msg, nearest_angle, pressure))
-
-        except Exception as err:
-            rospy.logerr(err)
-
 
 if __name__ == "__main__":
     finger_num = rospy.get_param("finger_num")
@@ -369,7 +270,7 @@ if __name__ == "__main__":
     debug = rospy.get_param("debug")
 
     GraspDetectionServer(
-        "detect_server",
+        "grasp_detection_server",
         finger_num=finger_num,
         unit_angle=unit_angle,
         hand_radius_mm=hand_radius_mm,
