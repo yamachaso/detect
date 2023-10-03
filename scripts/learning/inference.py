@@ -13,7 +13,7 @@ from modules.const import CONFIGS_PATH, DATASETS_PATH, OUTPUTS_PATH
 if __name__ == "__main__":
 
     parser = ArgumentParser()
-    parser.add_argument("--weight", "-w", default=f"{OUTPUTS_PATH}/2022_08_04_07_40/model_final.pth")
+    parser.add_argument("--weight", "-w", default=f"{OUTPUTS_PATH}/2023_09_18_11_54/model_final.pth")
     parser.add_argument("--device", "-d", default="cuda:0")
     parser.add_argument("--save", action='store_false')
     args = parser.parse_args()
@@ -52,4 +52,4 @@ if __name__ == "__main__":
         if args.save:
             cv2.imwrite(
                 f"{save_dir}/{fname}",
-                out.get_image()[:, :, ::-1])
+                out)

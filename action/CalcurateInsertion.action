@@ -6,4 +6,5 @@ sensor_msgs/PointCloud2 points
 geometry_msgs/Pose pose
 int32 angle
 float32 pressure
+bool success
 ---

@@ -45,8 +45,8 @@ class VisualizeClient:
         for action in self.actions:
             action.wait_for_server()
 
-    def visualize_candidates(self, base_image: Image, candidates_list: List[Candidates]):
-        self.draw_candidates_action.send_goal(VisualizeCandidatesGoal(base_image, candidates_list))
+    def visualize_candidates(self, base_image: Image, candidates_list: List[Candidates], depth_image):
+        self.draw_candidates_action.send_goal(VisualizeCandidatesGoal(base_image, candidates_list, depth_image))
 
     def visualize_target(self, target_index: int):
         self.draw_target_action.send_goal(VisualizeTargetGoal(target_index))

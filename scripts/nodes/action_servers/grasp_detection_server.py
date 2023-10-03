@@ -28,6 +28,7 @@ from std_msgs.msg import Header
 from modules.ros.publishers import ImageMatPublisher
 
 from modules.const import CONFIGS_PATH, DATASETS_PATH, OUTPUTS_PATH
+from scipy import optimize
 
 
 def process_instance_segmentation_result_routine(depth, instance_msg, detect_func):
@@ -145,13 +146,14 @@ class GraspDetectionServer:
     def compute_object_center_pose_stampd(self, depth, mask, c_3d_c_on_surface, header):
         c_3d_c = Point(c_3d_c_on_surface.x, c_3d_c_on_surface.y, c_3d_c_on_surface.z)
         c_3d_w = self.tf_client.transform_point(header, c_3d_c)
-        c_orientation = self.pose_estimator.get_orientation(depth, mask)
+        # TMP とりあえず使ってないので無視
+        # c_orientation = self.pose_estimator.get_orientation(depth, mask)
 
         return PoseStamped(
             Header(frame_id="base_link"),
             Pose(
                 position=c_3d_w.point,
-                orientation=c_orientation
+                # orientation=c_orientation
             )
         )
 
@@ -195,16 +197,26 @@ class GraspDetectionServer:
             # TODO: depthしきい値を求めるためにmerged_maskが必要だが非効率なので要改善
             masks = [self.bridge.imgmsg_to_cv2(instance_msg.mask) for instance_msg in instances]
             # TODO: compute n by camera distance
-            vis_base_img_msg, flont_indexes = self.depth_filtering(img_msg, depth_msg, img, depth, masks, thresh=0.8, n=5)
+            print("before")
+            # vis_base_img_msg, flont_indexes = self.depth_filtering(img_msg, depth_msg, img, depth, masks, thresh=0.8, n=5)
+            vis_base_img_msg = img_msg
+            print("after")
+
+            print("instance num : ", len(masks))
+
             if not self.cdt_client:
                 flont_indexes = list(range(len(instances)))
+            flont_indexes = list(range(len(instances))) # TMP
             flont_indexes_set = set(flont_indexes)
 
             objects: List[DetectedObject] = []  # 空のものは省く
             candidates_list: List[Candidates] = []  # 空のものも含む
 
+            print("flont_indexes_set", len(flont_indexes_set))
+
             # 把持候補の生成 (並列処理)
             routine_args = []
+            print("instances loop")
             for i in range(len(instances)):
                 # ignore other than instances are located on top of stacks
                 # TODO: しきい値で切り出したマスク内に含まれないインスタンスはスキップ
@@ -215,11 +227,15 @@ class GraspDetectionServer:
                 routine_args.append((depth, instance_msg, self.grasp_detector.detect))
             results = self.pool.starmap(process_instance_segmentation_result_routine, routine_args)
 
+            print("result loop")
+            print(len(results))
+
             # TODO: 座標変換も並列処理化したい
             for obj_index, (candidates, instance_center, bbox_handler) in enumerate(results):
                 if len(candidates) == 0:
                     continue
                 # select best candidate
+
                 valid_candidates = [cnd for cnd in candidates if cnd.is_valid] if enable_candidate_filter else candidates
                 is_valid = len(valid_candidates) > 0
                 valid_scores = [cnd.total_score for cnd in valid_candidates]
@@ -230,39 +246,53 @@ class GraspDetectionServer:
 
                 # TODO: is_frameinの判定冗長なので要整理
                 include_any_frameout = not np.any([cnd.is_framein for cnd in valid_candidates])
-                if include_any_frameout or not is_valid:
-                    continue
+                # if include_any_frameout or not is_valid:
+                #     continue
 
                 best_cand = valid_candidates[target_index]
+                print("c")
+
                 # 3d projection
-                insertion_points_c = [self.projector.screen_to_camera_2(points_msg, uv) for uv in best_cand.get_insertion_points_uv()]
+                # insertion_points_c = [self.projector.screen_to_camera_2(points_msg, uv) for uv in best_cand.get_insertion_points_uv()]
+                print("d")
                 c_3d_c_on_surface = self.projector.screen_to_camera_2(points_msg, best_cand.get_center_uv())
+                print("e")
                 # insertion_points_c = [self.projector.screen_to_camera(uv, d_mm) for uv, d_mm in best_cand.get_insertion_points_uvd()]
                 # c_3d_c_on_surface = self.projector.screen_to_camera(*best_cand.get_center_uvd())
                 # compute approach distance
-                length_to_center = self.compute_approach_distance(c_3d_c_on_surface, insertion_points_c)
+                # length_to_center = self.compute_approach_distance(c_3d_c_on_surface, insertion_points_c)
+                length_to_center = 0.2
                 # compute center pose stamped (world coords)
-                insertion_points_msg = [pt.point for pt in self.tf_client.transform_points(header, insertion_points_c)]
+                print("trans before")
+                # insertion_points_msg = [pt.point for pt in self.tf_client.transform_points(header, insertion_points_c)]
+                print("trans after")
                 center_pose_stamped_msg = self.compute_object_center_pose_stampd(depth, mask, c_3d_c_on_surface, header)
+                print("center_pose_stamped_msg after")
                 # compute 3d radiuses
-                short_radius_3d, long_radius_3d = self.compute_object_3d_radiuses(depth, bbox_handler)
+                # short_radius_3d, long_radius_3d = self.compute_object_3d_radiuses(depth, bbox_handler)
+                short_radius_3d, long_radius_3d = 0, 0
+                print("compute_object_3d_radiuses after")
                 angle = best_cand.angle - self.hand_mount_rotation
                 # 絶対値が最も小さい角度
                 # nearest_angle = self.augment_angles(angle)[0]
                 nearest_angle = 0
+                print("depth depth : ", instance_center, depth[instance_center[1]][instance_center[0]])
                 objects.append(DetectedObject(
-                    points=insertion_points_msg,
+                    # points=insertion_points_msg,
                     center_pose=center_pose_stamped_msg,
                     angle=nearest_angle,
                     short_radius=short_radius_3d,
                     long_radius=long_radius_3d,
                     length_to_center=length_to_center,
-                    score=best_cand.total_score,
+                    # score=best_cand.total_score,
+                    score=depth[instance_center[1]][instance_center[0]],
                     index=obj_index  # for visualize
                 )
                 )
-
-            self.visualize_client.visualize_candidates(vis_base_img_msg, candidates_list)
+                print("end")
+            print("visualize before")
+            self.visualize_client.visualize_candidates(vis_base_img_msg, candidates_list, depth_msg)
+            print("visualize after")
             if self.dbg_info_publisher:
                 self.dbg_info_publisher.publish(GraspDetectionDebugInfo(header, candidates_list))
             spent = time() - start_time
@@ -272,9 +302,58 @@ class GraspDetectionServer:
         except Exception as err:
             rospy.logerr(err)
 
+
+    def convert_mm_to_angle(self, r_target):
+        # 引数 r が 60 ~ 100の間でないと精度が低い
+        r0 = 95 # 付け根部分の関係
+        l = 180 # 指の長さ
+
+        # 解きたい関数をリストで戻す
+        def func(x, r):
+            t = x[0]
+            equations = [
+                (r - r0) * t + l * np.sin(np.radians(70)) - l*np.sin(t + np.radians(70))
+            ]
+            return equations
+
+        # 制約を設定
+        def constraint_func(x):
+            return x[0] - 0.6  # t >= 0.6
+
+        # 初期値
+        cons = (
+            {'type': 'ineq', 'fun': constraint_func}
+        )
+
+        # 最適化を実行
+        initial_guess = [0.0]
+        result = optimize.minimize(lambda x: np.sum(np.array(func(x, r_target))**2), initial_guess, constraints=cons, method="SLSQP")
+        return result.x[0]
+
+    def convert_angle_to_pressure(self, angle):
+        # degree
+        a = 53.77
+        b = 21.79
+        # c = 10.84
+        # c = 30
+        c = 40
+        print(angle)
+        if b * b - 4 * a  *(c - angle) < 0:
+            return 0
+        else:
+            return (- b + np.sqrt(b * b - 4 * a  *(c - angle)) ) / (2 * a)
+
     def convert_mm_to_pascal(self, r):
-        # TODO
-        return 0.5 
+        angle = np.rad2deg(self.convert_mm_to_angle(r))
+        pressure = self.convert_angle_to_pressure(angle)
+
+        print("\033[92m{}\033[0m".format("radius"))
+        print("\033[92m{}\033[0m".format(r))
+        print("\033[92m{}\033[0m".format("angle"))
+        print("\033[92m{}\033[0m".format(angle))
+        print("\033[92m{}\033[0m".format("pressure"))
+        print("\033[92m{}\033[0m".format(pressure))
+        return pressure
 
     def callback2(self, goal: CalcurateInsertionGoal):
         print("callback2 called")
@@ -292,61 +371,75 @@ class GraspDetectionServer:
             # TODO: depthしきい値を求めるためにmerged_maskが必要だが非効率なので要改善
             # print(instances[0].contour)
             print(type(instances[0].contour))
-            contours = np.array([multiarray2numpy(int, np.int32, instance_msg.contour) for instance_msg in instances])
+
+            contours = np.array([multiarray2numpy(int, np.int32, instance_msg.contour) for instance_msg in instances], dtype=object)
             centers = np.array([np.array(instance_msg.center) for instance_msg in instances])
 
             ic_result = self.insertion_calculator.calculate(depth, contours, centers)
 
             x, y, t, r, d = ic_result
-            img_result = self.insertion_calculator.drawResult(img.copy(), contours, x, y, t, r, d)
 
-            frame_id = img_msg.header.frame_id
-            stamp = img_msg.header.stamp
+            success = True
+            if d < 0:
+                success = False
 
-            self.result_publisher.publish(img_result, frame_id, stamp)
-            
-            depth_tmp = depth.copy()
-            depth_tmp[depth_tmp > 1000] = 1000
-            depth_img = (depth_tmp / depth_tmp.max() * 255).astype(np.uint8)
-            depth_img = cv2.cvtColor(depth_img, cv2.COLOR_GRAY2RGB)
-            img_result2 = self.grasp_detector.drawResult(depth_img, depth, x, y, t, r)
+            if success:
+                img_result = self.insertion_calculator.drawResult(img.copy(), contours, x, y, t, r, d)
 
-            self.result2_publisher.publish(img_result2, frame_id, stamp)
+                frame_id = img_msg.header.frame_id
+                stamp = img_msg.header.stamp
 
-            
-            OUTPUT_DIR = f"{OUTPUTS_PATH}/tmp/{self.now}"
-            print(OUTPUT_DIR)
-            os.makedirs(OUTPUT_DIR, exist_ok=True)
-            os.makedirs(f"{OUTPUT_DIR}/color", exist_ok=True)
-            os.makedirs(f"{OUTPUT_DIR}/depth", exist_ok=True)
-            # print(f'{OUTPUT_DIR}/color/{self.count}.jpg')
-            cv2.imwrite(f'{OUTPUT_DIR}/color/{self.count}.jpg', img_result)
-            cv2.imwrite(f'{OUTPUT_DIR}/depth/{self.count}.jpg', img_result2)
-            self.count += 1
- 
-            print("insertion x y :", x, y)
-            c_3d_c_on_surface = self.projector.screen_to_camera_2(points_msg, (x, y))
+                self.result_publisher.publish(img_result, frame_id, stamp)
+                depth_tmp = depth.copy()
+                depth_tmp[depth_tmp > 1000] = 1000
+                depth_img = (depth_tmp / depth_tmp.max() * 255).astype(np.uint8)
+                depth_img = cv2.cvtColor(depth_img, cv2.COLOR_GRAY2RGB)
+                img_result2 = self.insertion_calculator.drawResult(depth_tmp, contours, x, y, t, r, d)
 
-            print("c_3d_c_on_surface :", c_3d_c_on_surface)
+                # self.result2_publisher.publish(img_result2, frame_id, stamp)
+
+                
+                OUTPUT_DIR = f"{OUTPUTS_PATH}/tmp/{self.now}"
+                print(OUTPUT_DIR)
+                os.makedirs(OUTPUT_DIR, exist_ok=True)
+                os.makedirs(f"{OUTPUT_DIR}/color", exist_ok=True)
+                os.makedirs(f"{OUTPUT_DIR}/depth", exist_ok=True)
+                # print(f'{OUTPUT_DIR}/color/{self.count}.jpg')
+                cv2.imwrite(f'{OUTPUT_DIR}/color/{self.count}.jpg', img_result)
+                cv2.imwrite(f'{OUTPUT_DIR}/depth/{self.count}.jpg', img_result2)
+                self.count += 1
+    
+                c_3d_c_on_surface = self.projector.screen_to_camera_2(points_msg, (x, y))
 
 
-            point_msg = self.tf_client.transform_point(header, c_3d_c_on_surface)
 
-            pose_msg = Pose(
-                position=point_msg.point
-            )
-  
-            # angle = t
-            angle = int(np.rad2deg(t)) - self.hand_mount_rotation
-            # 絶対値が最も小さい角度
-            nearest_angle = self.augment_angles(angle)[0]
+                point_msg = self.tf_client.transform_point(header, c_3d_c_on_surface)
 
-            pressure = self.convert_mm_to_pascal(r)
+                print("point_msg")
+                print(point_msg)
 
-            spent = time() - start_time
-            # print(f"stamp: {stamp.to_time()}, spent: {spent:.3f}, objects: {len(objects)} ({len(instances)})")
-            print(f"stamp: {stamp.to_time()}, spent: {spent:.3f}, angle: {nearest_angle}")
-            self.server2.set_succeeded(CalcurateInsertionResult(pose_msg, nearest_angle, pressure))
+                pose_msg = Pose(
+                    position=point_msg.point
+                )
+    
+                # angle = t
+                angle = int(np.rad2deg(t)) - self.hand_mount_rotation
+                # 絶対値が最も小さい角度
+                nearest_angle = self.augment_angles(angle)[0]
+
+                pressure = self.convert_mm_to_pascal(r)
+
+                spent = time() - start_time
+                # print(f"stamp: {stamp.to_time()}, spent: {spent:.3f}, objects: {len(objects)} ({len(instances)})")
+                print(f"stamp: {stamp.to_time()}, spent: {spent:.3f}, angle: {nearest_angle}")
+
+            else:
+                pose_msg = Pose()
+                nearest_angle = 0
+                pressure = 0
+                print("callback2 failed...")
+
+            self.server2.set_succeeded(CalcurateInsertionResult(pose_msg, nearest_angle, pressure, success))
 
         except Exception as err:
             rospy.logerr(err)

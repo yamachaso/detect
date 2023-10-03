@@ -17,6 +17,13 @@ for d in ["train", "val"]:
 metadata = MetadataCatalog.get("cabbage_train")
 dataset_dicts = DatasetCatalog.get("cabbage_train")
 
+print("##############")
+print(MetadataCatalog.get("cabbage_train"))
+print("##############")
+print(MetadataCatalog.get("cabbage_val"))
+print("##############")
+print(1 / 0)
+
 cfg = get_cfg()
 cfg.merge_from_file(f"{CONFIGS_PATH}/config.yaml")
 cfg.MODEL.WEIGHTS = "detectron2://COCO-InstanceSegmentation/mask_rcnn_R_50_FPN_3x/137849600/model_final_f10217.pkl"

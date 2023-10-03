@@ -6,7 +6,7 @@
     <arg name="fps" default="1" />
     <arg name="device" default="cuda:0" />
     <arg name="enable_depth_filter" default="true" />
-    <arg name="enable_candidate_filter" default="true" />
+    <arg name="enable_candidate_filter" default="false" />
     <!-- <arg name="finger_num" default="4" /> -->
     <arg name="finger_num" default="3" />
     <arg name="unit_angle" default="15" />

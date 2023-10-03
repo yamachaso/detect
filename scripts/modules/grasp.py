@@ -432,12 +432,14 @@ class GraspDetector:
     
 
     def is_in_image(self, h, w, i, j) -> bool:
+        # not in use now
         if i < 0 or i >= h or j < 0 or j >= w:
             return False
         return True
     
 
     def drawResult(self, img, depth, x, y, t, r):
+        # not in use now
         height, width = depth.shape[0], depth.shape[1]
         center_h, center_w = height // 2, width // 2
         center_d = depth[center_h, center_w]
@@ -477,6 +479,7 @@ class GraspDetector:
     
 
     def calcurate_insertion(self, depth):
+        # not in use now
         # 単位変換
         height, width = depth.shape[0], depth.shape[1]
 
@@ -655,13 +658,27 @@ class InsertionCalculator:
             xytr = np.insert(xyr, 2, theta)
             xytr_list.append(xytr)
 
-        return xytr_list, center_d
+        print("index : ", index)
+        # 画像中心にキャベツが見つからなかったとき
+        if index == -1:
+            center_d = -1
+
+        return xytr_list, center_d, finger_radius_px
+    
+    def point_average_depth(self, hi, wi, depth: Image, finger_radius_px):
+        mask = np.zeros_like(depth)
+        cv2.circle(mask, (wi, hi), int(finger_radius_px), 1, thickness=-1)
+        mask = mask.astype(np.bool)
+
+        return depth[mask].mean()
+
+
     
     def calculate(self, depth: Image, contours: np.ndarray, centers):
         # center_d = depth[self.h // 2, self.w // 2]
         # center_d = 600 # TODO
 
-        xytr_list, center_d = self.get_xytr_list(depth, contours, centers)
+        xytr_list, center_d, finger_radius_px = self.get_xytr_list(depth, contours, centers)
 
         max_score = -1
         best_x = -1
@@ -679,7 +696,8 @@ class InsertionCalculator:
                 if not self.is_in_image(self.h, self.w, hi, wi):
                     update = False
                     break
-                tmp_score = min(tmp_score, depth[hi][wi])
+                tmp_score = min(tmp_score, 
+                                self.point_average_depth(hi, wi, depth, finger_radius_px))
 
             if update and tmp_score > max_score:
                 best_x = int(xi) 

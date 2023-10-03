@@ -185,6 +185,7 @@ class InsertionCalculator:
             a, b = ab
             a /= 2
             b /= 2
+            angle *= -1
             a += finger_radius_px
             # print("radio : ", a / finger_radius_px)
             b += finger_radius_px
@@ -255,13 +256,22 @@ class InsertionCalculator:
             xytr = np.insert(xyr, 2, theta)
             xytr_list.append(xytr)
 
-        return xytr_list, center_d
+        return xytr_list, center_d, finger_radius_px
+    
+    def point_average_depth(self, hi, wi, depth: Image, finger_radius_px):
+        mask = np.zeros_like(depth)
+        cv2.circle(mask, (wi, hi), finger_radius_px, 1, thickness=-1)
+        mask = mask.astype(np.bool)
+
+        return depth[mask].mean()
+
+
     
     def calculate(self, depth: Image, contours: np.ndarray, centers):
         # center_d = depth[self.h // 2, self.w // 2]
         # center_d = 600 # TODO
 
-        xytr_list, center_d = self.get_xytr_list(depth, contours, centers)
+        xytr_list, center_d, finger_radius_px = self.get_xytr_list(depth, contours, centers)
 
         max_score = -1
         best_x = -1
@@ -269,8 +279,7 @@ class InsertionCalculator:
         best_t = -1
         best_r = -1
 
-
-        for i in range(16, self.candidate_num):
+        for i in range(self.candidate_num):
             xi, yi, ti, ri = xytr_list[i]
             update = True
             tmp_score = 100000
@@ -280,11 +289,12 @@ class InsertionCalculator:
                 if not self.is_in_image(self.h, self.w, hi, wi):
                     update = False
                     break
-                tmp_score = min(tmp_score, depth[hi][wi])
+                tmp_score = min(tmp_score, 
+                                self.point_average_depth(hi, wi, depth, finger_radius_px))
 
             if update and tmp_score > max_score:
-                best_x = xi 
-                best_y = yi
+                best_x = int(xi) 
+                best_y = int(yi)
                 best_t = ti
                 best_r = ri
 
@@ -309,7 +319,7 @@ class InsertionCalculator:
         for i in range(self.finger_num):
             xx = int(x + r * np.cos(t + np.radians(i * self.base_angle)))
             yy = int(y - r * np.sin(t + np.radians(i * self.base_angle)))
-            cv2.circle(img, (yy, xx), 15, (255, 0, 255), thickness=-1)
+            cv2.circle(img, (xx, yy), 15, (255, 0, 255), thickness=-1)
 
         return img
 
@@ -329,6 +339,7 @@ depth_tmp = np.zeros(img.shape[:2])
 ic_ress = insertion_calculator.calculate(depth_tmp, res.contours, res.centers)
 
 x, y, t, r, d = ic_ress
+# img_tmp = img.copy()
 img_tmp = insertion_calculator.drawResult(img_tmp, res.contours, x, y, t, r, d)
 imshow(img_tmp)
 
