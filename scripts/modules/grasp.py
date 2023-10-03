@@ -560,6 +560,8 @@ class InsertionCalculator:
         self.base_angle = 360 // self.finger_num  # ハンドの指間の角度 (等間隔前提)
         self.candidate_num = self.base_angle // self.unit_angle
 
+        self.index = None
+
 
     def _convert_mm_to_px(self, v_mm: Mm, d: Mm) -> Px:
         v_px = (v_mm / d) * self.fp  # (v_mm / 1000) * self.fp / (d / 1000)
@@ -637,8 +639,8 @@ class InsertionCalculator:
 
     def get_xytr_list(self, depth: Image, contours: np.ndarray, centers):
         # center_dが欠損すると0 divisionになるので注意
-        index = self.get_target_index(contours)
-        center = centers[index]
+        self.index = self.get_target_index(contours)
+        center = centers[self.index]
         center_d = depth[center[1], center[0]]
 
         # TMP 動作確認
@@ -649,7 +651,7 @@ class InsertionCalculator:
         finger_radius_px = self._convert_mm_to_px(self.finger_radius_mm, center_d)
         # ベクトルははじめの角度求めるとかで関数内部で計算してもいいかも
 
-        ellipse = cv2.fitEllipse(contours[index])
+        ellipse = cv2.fitEllipse(contours[self.index])
 
         xytr_list = []
         for i in range(self.candidate_num):
@@ -658,12 +660,16 @@ class InsertionCalculator:
             xytr = np.insert(xyr, 2, theta)
             xytr_list.append(xytr)
 
-        print("index : ", index)
+        print("index : ", self.index)
+ 
+        cabbage_size_mm = self._convert_px_to_mm(max(ellipse[1][0], ellipse[1][1]), center_d)
+
         # 画像中心にキャベツが見つからなかったとき
-        if index == -1:
+        if self.index == -1:
             center_d = -1
 
-        return xytr_list, center_d, finger_radius_px
+
+        return xytr_list, center, center_d, finger_radius_px, cabbage_size_mm
     
     def point_average_depth(self, hi, wi, depth: Image, finger_radius_px):
         mask = np.zeros_like(depth)
@@ -671,14 +677,12 @@ class InsertionCalculator:
         mask = mask.astype(np.bool)
 
         return depth[mask].mean()
-
-
     
     def calculate(self, depth: Image, contours: np.ndarray, centers):
         # center_d = depth[self.h // 2, self.w // 2]
         # center_d = 600 # TODO
 
-        xytr_list, center_d, finger_radius_px = self.get_xytr_list(depth, contours, centers)
+        xytr_list, center, center_d, finger_radius_px, cabbage_size_mm = self.get_xytr_list(depth, contours, centers)
 
         max_score = -1
         best_x = -1
@@ -686,35 +690,81 @@ class InsertionCalculator:
         best_t = -1
         best_r = -1
 
+        print("CABBAGE SIZE", cabbage_size_mm)
+
+        good_xytr_list = []
+
         for i in range(self.candidate_num):
             xi, yi, ti, ri = xytr_list[i]
             update = True
-            tmp_score = 100000
+            worst_depth = 100000
             for j in range(self.finger_num):
                 hi = int(yi - ri * np.sin(ti + np.radians(j*self.base_angle)))
                 wi = int(xi + ri * np.cos(ti + np.radians(j*self.base_angle)))
                 if not self.is_in_image(self.h, self.w, hi, wi):
                     update = False
                     break
-                tmp_score = min(tmp_score, 
+                worst_depth = min(worst_depth, 
                                 self.point_average_depth(hi, wi, depth, finger_radius_px))
+                
+            # cabbage_size_mm * 0.6でキャベツの高さをイメージ
+            if (worst_depth - center_d) / (cabbage_size_mm * 0.6) > 1:
+                good_xytr_list.append([xi, yi, ti, ri])
+                    
 
-            if update and tmp_score > max_score:
+            if update and worst_depth > max_score:
                 best_x = int(xi) 
                 best_y = int(yi)
                 best_t = ti
                 best_r = ri
 
-                max_score = tmp_score        
+                max_score = worst_depth        
+
+        rospy.logerr("--------------------------------------------")
+        print(len(good_xytr_list))
+        if len(good_xytr_list) > 0:
+            
+            print("good_xytr_list", good_xytr_list)
+            dis2 = 100000
+            for xi, yi, ti, ri in good_xytr_list:
+                if dis2 > (center[0] - xi)**2 + (center[1] - yi)**2:
+                    best_x = int(xi) 
+                    best_y = int(yi)
+                    best_t = ti
+                    best_r = ri
+                    dis2 = (center[0] - xi)**2 + (center[1] - yi)**2
+
+
+
 
         print("x, y, t, r", best_x, best_y, best_t, best_r)
+
+
         best_r = self._convert_px_to_mm(best_r, center_d) # mm単位に
 
 
         return best_x, best_y, best_t, best_r, center_d
 
 
+    def get_major_minor_ratio(self, contours):
+
+
+        ellipse = cv2.fitEllipse(contours[self.index])
+        a, b = ellipse[1]
+        if a < b:
+            a, b = b, a
+        return b / a
     
+    def get_access_distance(self, contours, depth):
+        if self.index == -1:
+            return -1
+        
+        ratio  = self.get_major_minor_ratio(contours)
+        # TMP
+        # 0.6 というのは一番キャベツが立っているときの
+        # 長軸と短軸の比として設定している
+        return max(ratio - 0.6, 0) / 0.4 * 30 / 1000
+
 
     def drawResult(self, img, contours, x, y, t, r, d):
         index = self.get_target_index(contours)

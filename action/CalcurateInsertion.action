@@ -5,6 +5,7 @@ sensor_msgs/PointCloud2 points
 # std_msgs/Header header
 geometry_msgs/Pose pose
 int32 angle
+float32 distance
 float32 pressure
 bool success
 ---

@@ -377,7 +377,10 @@ class GraspDetectionServer:
 
             ic_result = self.insertion_calculator.calculate(depth, contours, centers)
 
-            x, y, t, r, d = ic_result
+            x, y, t, r, d = ic_result # r はmm単位
+
+            # 把持のとき、ハンドとキャベツをどのくらい離すか？
+            access_distance = self.insertion_calculator.get_access_distance(contours, d)
 
             success = True
             if d < 0:
@@ -390,24 +393,24 @@ class GraspDetectionServer:
                 stamp = img_msg.header.stamp
 
                 self.result_publisher.publish(img_result, frame_id, stamp)
-                depth_tmp = depth.copy()
-                depth_tmp[depth_tmp > 1000] = 1000
-                depth_img = (depth_tmp / depth_tmp.max() * 255).astype(np.uint8)
-                depth_img = cv2.cvtColor(depth_img, cv2.COLOR_GRAY2RGB)
-                img_result2 = self.insertion_calculator.drawResult(depth_tmp, contours, x, y, t, r, d)
+                # depth_tmp = depth.copy()
+                # depth_tmp[depth_tmp > 1000] = 1000
+                # depth_img = (depth_tmp / depth_tmp.max() * 255).astype(np.uint8)
+                # depth_img = cv2.cvtColor(depth_img, cv2.COLOR_GRAY2RGB)
+                # img_result2 = self.insertion_calculator.drawResult(depth_tmp, contours, x, y, t, r, d)
 
                 # self.result2_publisher.publish(img_result2, frame_id, stamp)
 
                 
-                OUTPUT_DIR = f"{OUTPUTS_PATH}/tmp/{self.now}"
-                print(OUTPUT_DIR)
-                os.makedirs(OUTPUT_DIR, exist_ok=True)
-                os.makedirs(f"{OUTPUT_DIR}/color", exist_ok=True)
-                os.makedirs(f"{OUTPUT_DIR}/depth", exist_ok=True)
-                # print(f'{OUTPUT_DIR}/color/{self.count}.jpg')
-                cv2.imwrite(f'{OUTPUT_DIR}/color/{self.count}.jpg', img_result)
-                cv2.imwrite(f'{OUTPUT_DIR}/depth/{self.count}.jpg', img_result2)
-                self.count += 1
+                # OUTPUT_DIR = f"{OUTPUTS_PATH}/tmp/{self.now}"
+                # print(OUTPUT_DIR)
+                # os.makedirs(OUTPUT_DIR, exist_ok=True)
+                # os.makedirs(f"{OUTPUT_DIR}/color", exist_ok=True)
+                # os.makedirs(f"{OUTPUT_DIR}/depth", exist_ok=True)
+                # # print(f'{OUTPUT_DIR}/color/{self.count}.jpg')
+                # cv2.imwrite(f'{OUTPUT_DIR}/color/{self.count}.jpg', img_result)
+                # cv2.imwrite(f'{OUTPUT_DIR}/depth/{self.count}.jpg', img_result2)
+                # self.count += 1
     
                 c_3d_c_on_surface = self.projector.screen_to_camera_2(points_msg, (x, y))
 
@@ -439,7 +442,7 @@ class GraspDetectionServer:
                 pressure = 0
                 print("callback2 failed...")
 
-            self.server2.set_succeeded(CalcurateInsertionResult(pose_msg, nearest_angle, pressure, success))
+            self.server2.set_succeeded(CalcurateInsertionResult(pose_msg, nearest_angle, access_distance, pressure, success))
 
         except Exception as err:
             rospy.logerr(err)

@@ -158,6 +158,8 @@ class InsertionCalculator:
         self.base_angle = 360 // self.finger_num  # ハンドの指間の角度 (等間隔前提)
         self.candidate_num = self.base_angle // self.unit_angle
 
+        self.index = None
+
 
     def _convert_mm_to_px(self, v_mm: Mm, d: Mm) -> Px:
         v_px = (v_mm / d) * self.fp  # (v_mm / 1000) * self.fp / (d / 1000)
@@ -183,6 +185,7 @@ class InsertionCalculator:
         def generate_ellipse(c, ab, angle):
             cx, cy = c
             a, b = ab
+            print("a, b: ", a, b)
             a /= 2
             b /= 2
             angle *= -1
@@ -235,8 +238,8 @@ class InsertionCalculator:
 
     def get_xytr_list(self, depth: Image, contours: np.ndarray, centers):
         # center_dが欠損すると0 divisionになるので注意
-        index = self.get_target_index(contours)
-        center = centers[index]
+        self.index = self.get_target_index(contours)
+        center = centers[self.index]
         center_d = depth[center[1], center[0]]
 
         # TMP 動作確認
@@ -247,7 +250,7 @@ class InsertionCalculator:
         finger_radius_px = self._convert_mm_to_px(self.finger_radius_mm, center_d)
         # ベクトルははじめの角度求めるとかで関数内部で計算してもいいかも
 
-        ellipse = cv2.fitEllipse(contours[index])
+        ellipse = cv2.fitEllipse(contours[self.index])
 
         xytr_list = []
         for i in range(self.candidate_num):
@@ -256,11 +259,16 @@ class InsertionCalculator:
             xytr = np.insert(xyr, 2, theta)
             xytr_list.append(xytr)
 
+        print("index : ", self.index)
+        # 画像中心にキャベツが見つからなかったとき
+        if self.index == -1:
+            center_d = -1
+
         return xytr_list, center_d, finger_radius_px
     
     def point_average_depth(self, hi, wi, depth: Image, finger_radius_px):
         mask = np.zeros_like(depth)
-        cv2.circle(mask, (wi, hi), finger_radius_px, 1, thickness=-1)
+        cv2.circle(mask, (wi, hi), int(finger_radius_px), 1, thickness=-1)
         mask = mask.astype(np.bool)
 
         return depth[mask].mean()
@@ -307,7 +315,15 @@ class InsertionCalculator:
         return best_x, best_y, best_t, best_r, center_d
 
 
-    
+    def get_major_minor_ratio(self, contours):
+        if self.index == -1:
+            return -1
+
+        ellipse = cv2.fitEllipse(contours[self.index])
+        a, b = ellipse[1]
+        if a < b:
+            a, b = b, a
+        return b / a
 
     def drawResult(self, img, contours, x, y, t, r, d):
         index = self.get_target_index(contours)
@@ -322,6 +338,7 @@ class InsertionCalculator:
             cv2.circle(img, (xx, yy), 15, (255, 0, 255), thickness=-1)
 
         return img
+
 
 finger_num = 3
 hand_radius_mm = 100
@@ -338,10 +355,15 @@ insertion_calculator = InsertionCalculator(finger_num=finger_num, hand_radius_mm
 depth_tmp = np.zeros(img.shape[:2])
 ic_ress = insertion_calculator.calculate(depth_tmp, res.contours, res.centers)
 
+ratio = insertion_calculator.get_major_minor_ratio(res.contours)
+print("ratio : ",  ratio)
+
 x, y, t, r, d = ic_ress
 # img_tmp = img.copy()
 img_tmp = insertion_calculator.drawResult(img_tmp, res.contours, x, y, t, r, d)
 imshow(img_tmp)
+
+
 
 # %%
 # %%

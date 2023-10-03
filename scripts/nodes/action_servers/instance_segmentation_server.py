@@ -41,11 +41,11 @@ class InstanceSegmentationServer:
             seg = res.draw_instances(img[:, :, ::-1])
             self.seg_publisher.publish(seg, frame_id, stamp)
 
-            OUTPUT_DIR = f"{OUTPUTS_PATH}/tmp/{self.now}"
-            os.makedirs(OUTPUT_DIR, exist_ok=True)
-            os.makedirs(f"{OUTPUT_DIR}/seg", exist_ok=True)
-            cv2.imwrite(f'{OUTPUT_DIR}/seg/{self.count}.jpg', seg)
-            self.count += 1
+            # OUTPUT_DIR = f"{OUTPUTS_PATH}/tmp/{self.now}"
+            # os.makedirs(OUTPUT_DIR, exist_ok=True)
+            # os.makedirs(f"{OUTPUT_DIR}/seg", exist_ok=True)
+            # cv2.imwrite(f'{OUTPUT_DIR}/seg/{self.count}.jpg', seg)
+            # self.count += 1
             
 
             instances = [InstanceHandler.from_predict_result(res, i) for i in range(res.num_instances)]

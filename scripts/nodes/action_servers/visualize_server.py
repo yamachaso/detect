@@ -81,11 +81,11 @@ class VisualizeServer:
          
 
         #################################
-        OUTPUT_DIR = f"{OUTPUTS_PATH}/tmp/{self.now}"
-        os.makedirs(OUTPUT_DIR, exist_ok=True)
-        os.makedirs(f"{OUTPUT_DIR}/cand", exist_ok=True)
-        cv2.imwrite(f'{OUTPUT_DIR}/cand/{self.count}.jpg', res_img)
-        self.count += 1
+        # OUTPUT_DIR = f"{OUTPUTS_PATH}/tmp/{self.now}"
+        # os.makedirs(OUTPUT_DIR, exist_ok=True)
+        # os.makedirs(f"{OUTPUT_DIR}/cand", exist_ok=True)
+        # cv2.imwrite(f'{OUTPUT_DIR}/cand/{self.count}.jpg', res_img)
+        # self.count += 1
         #################################
 
         self.last_image = res_img
