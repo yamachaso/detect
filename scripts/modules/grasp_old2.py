@@ -398,33 +398,149 @@ class GraspDetector:
     def compute_insertion_points(self, center: ImagePointUV, base_finger_v: np.ndarray):
         return self._compute_rotated_points(center, base_finger_v, self.base_angle)
 
-    def detect(self, img: Image, depth: Image, centers, contours, masks):
+    def detect(self, center: ImagePointUV, depth: Image, contour: np.ndarray) -> List[GraspCandidate]:
         # 単位変換
-        depth_list = [depth[center[1]][center[0]] for center in centers]
-        max_depth = max(depth_list)
-        min_depth = min(depth_list)
-        depth_score = 1 - (depth_list - min_depth) / (max_depth - min_depth)
+        center_d = depth[center[1], center[0]]
+        # center_dが欠損すると0 divisionになるので注意
+        hand_radius_px = self._convert_mm_to_px(self.hand_radius_mm, center_d)
+        finger_radius_px = self._convert_mm_to_px(
+            self.finger_radius_mm, center_d)
+        # ベクトルははじめの角度求めるとかで関数内部で計算してもいいかも
+        unit_vector = np.array([0, -1])
+        base_finger_v = unit_vector * hand_radius_px  # 単位ベクトル x ハンド半径
+        candidates = []
 
-        ellipse_list = [cv2.fitEllipse(contour) for contour in contours]
-        ellipse_masks = [cv2.ellipse(np.zeros_like(depth),ellipse, 1, -1).astype(np.bool) for ellipse in ellipse_list]
-        original_masks = [mask.astype(np.bool) for mask in masks]
-        ellipse_iou = []
-        for mask, emask in zip(original_masks, ellipse_masks):
-            ellipse_iou.append(np.sum(mask * emask) / np.sum(mask | emask)) # IoU
-        max_iou = max(ellipse_iou)
-        min_iou = min(ellipse_iou)
-        ellipse_score = (ellipse_iou - min_iou) / (max_iou - min_iou)
+        try:
+            for i in range(self.candidate_num):
+                finger_v = base_finger_v
+                insertion_points = self.compute_insertion_points(
+                    center, finger_v)
+                angle = self.unit_angle * i
+                cnd = GraspCandidate(hand_radius_px=hand_radius_px, finger_radius_px=finger_radius_px, angle=angle,
+                                        depth=depth, contour=contour, center=center, insertion_points=insertion_points,
+                                        elements_th=self.elements_th, el_insertion_th=self.el_insertion_th, 
+                                        el_contact_th=self.el_contact_th, el_bw_depth_th=self.el_bw_depth_th
+                                        )
+                candidates.append(cnd)
 
-        # TMP!!!!!
-        final_score = depth_score * 0.5 + ellipse_score * 0.5
+                base_finger_v = np.dot(base_finger_v, self.unit_rmat)
 
-        target_index = np.argmax(final_score)
+        except Exception:
+            pass
 
-        cv2.putText(img, f"{final_score[target_index]:.2f}", (centers[target_index][0] + 5, centers[target_index][1] + 5), cv2.FONT_HERSHEY_DUPLEX, 0.5, (255, 255, 255), 1)
-        cv2.ellipse(img, ellipse_list[target_index], (0, 255, 255), 3)
+        return candidates
+    
 
-        return target_index, img
+    def is_in_image(self, h, w, i, j) -> bool:
+        # not in use now
+        if i < 0 or i >= h or j < 0 or j >= w:
+            return False
+        return True
+    
 
+    def drawResult(self, img, depth, x, y, t, r):
+        # not in use now
+        height, width = depth.shape[0], depth.shape[1]
+        center_h, center_w = height // 2, width // 2
+        center_d = depth[center_h, center_w]
+
+        print("r mm" , r)
+        r = self._convert_mm_to_px(r, center_d)
+
+        print("r px", r)
+
+        point1x, point1y = int(x - r * np.sin(np.deg2rad(t))), int(y + r * np.cos(np.deg2rad(t)))
+        point2x, point2y = int(x - r * np.sin(np.deg2rad(t+120))), int(y + r * np.cos(np.deg2rad(t+120)))
+        point3x, point3y = int(x - r * np.sin(np.deg2rad(t+240))), int(y + r * np.cos(np.deg2rad(t+240)))
+
+        print("####", point1x, point1y, point2x, point2y, point3x, point3y)
+
+
+        # cv2.circle(img, (point1x, point1y), 15, (255, 0, 255), thickness=-1)
+        # cv2.circle(img, (point2x, point2y), 15, (255, 0, 255), thickness=-1)
+        # cv2.circle(img, (point3x, point3y), 15, (255, 0, 255), thickness=-1)
+
+        cv2.circle(img, (point1y, point1x), 15, (255, 0, 255), thickness=-1)
+        cv2.circle(img, (point2y, point2x), 15, (255, 0, 255), thickness=-1)
+        cv2.circle(img, (point3y, point3x), 15, (255, 0, 255), thickness=-1)
+
+        hand_radius_px = self._convert_mm_to_px(self.hand_radius_mm, center_d)
+        hand_radius_px_min = self._convert_mm_to_px(self.hand_radius_mm / 2, center_d)
+
+        for xi in range(-50, 50, 10):
+            for yi in range(-50, 50, 10):
+                cv2.circle(img, (center_w + yi, center_h + xi), 5, (0, 0, 255), thickness=-1)
+
+        # for ri in np.linspace(hand_radius_px_min, hand_radius_px, 10):
+        #     rr = int(ri)
+        #     cv2.circle(img, (y, x), rr, (0, 255, 0), thickness=2)
+
+        return img
+    
+
+    def calcurate_insertion(self, depth):
+        # not in use now
+        # 単位変換
+        height, width = depth.shape[0], depth.shape[1]
+
+        center_h, center_w = height // 2, width // 2
+        center_d = depth[center_h, center_w]
+
+        # center_dが欠損すると0 divisionになるので注意
+        hand_radius_px = self._convert_mm_to_px(self.hand_radius_mm, center_d)
+        hand_radius_px_min = self._convert_mm_to_px(self.hand_radius_mm / 2, center_d)
+        # finger_radius_px = self._convert_mm_to_px(self.finger_radius_mm, center_d)
+        # ベクトルははじめの角度求めるとかで関数内部で計算してもいいかも
+
+        max_score = 0
+        best_x = -1
+        best_y = -1
+        best_t = -1
+        best_r = -1
+
+        best_xi = -1
+        best_yi = -1
+        best_ti = -1
+        best_ri = -1
+
+        for ti in range(0, 120, 5):
+            for xi in range(-50, 50, 10):
+                for yi in range(-50, 50, 10):
+                    for ri in np.linspace(hand_radius_px_min, hand_radius_px, 10):
+                        rr = ri
+                        point1x, point1y = center_h + xi - rr * np.sin(np.deg2rad(ti)), center_w + yi + rr * np.cos(np.deg2rad(ti))
+                        point2x, point2y = center_h + xi - rr * np.sin(np.deg2rad(ti+120)), center_w + yi + rr * np.cos(np.deg2rad(ti+120))
+                        point3x, point3y = center_h + xi - rr * np.sin(np.deg2rad(ti+240)), center_w + yi + rr * np.cos(np.deg2rad(ti+240))
+
+                        if not self.is_in_image(height, width, point1x, point1y):
+                            continue
+                        if not self.is_in_image(height, width, point2x, point2y):
+                            continue
+                        if not self.is_in_image(height, width, point3x, point3y):
+                            continue
+
+                        # tmp_score = depth[int(point1x)][int(point1y)] + depth[int(point2x)][int(point2y)] + depth[int(point3x)][int(point3y)]
+                        tmp_score = min(min(depth[int(point1x)][int(point1y)], depth[int(point2x)][int(point2y)]), depth[int(point3x)][int(point3y)])
+                        # print("tmp_score", tmp_score)
+                        if tmp_score > max_score:
+                            best_x = xi + center_h
+                            best_y = yi + center_w
+                            best_t = ti
+                            best_r = rr
+
+                            best_xi = xi
+                            best_yi = yi
+                            best_ti = ti
+                            best_ri = ri
+
+                            max_score = tmp_score
+                            
+
+        print("xi, yi, ti, ri", best_xi, best_yi, best_ti, best_ri)
+        best_r = self._convert_px_to_mm(best_r, center_d) # mm単位に
+
+
+        return best_x, best_y, best_t, best_r
 
 
 class InsertionCalculator:
