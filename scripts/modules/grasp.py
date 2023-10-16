@@ -403,7 +403,7 @@ class GraspDetector:
         depth_list = [depth[center[1]][center[0]] for center in centers]
         max_depth = max(depth_list)
         min_depth = min(depth_list)
-        depth_score = 1 - (depth_list - min_depth) / (max_depth - min_depth)
+        depth_score = 1 - (depth_list - min_depth) / (max_depth - min_depth + 0.0001)
 
         ellipse_list = [cv2.fitEllipse(contour) for contour in contours]
         ellipse_masks = [cv2.ellipse(np.zeros_like(depth),ellipse, 1, -1).astype(np.bool) for ellipse in ellipse_list]
@@ -413,7 +413,10 @@ class GraspDetector:
             ellipse_iou.append(np.sum(mask * emask) / np.sum(mask | emask)) # IoU
         max_iou = max(ellipse_iou)
         min_iou = min(ellipse_iou)
-        ellipse_score = (ellipse_iou - min_iou) / (max_iou - min_iou)
+        ellipse_score = (ellipse_iou - min_iou) / (max_iou - min_iou + 0.0001)
+
+        print(depth_score)
+        print(ellipse_score)
 
         # TMP!!!!!
         final_score = depth_score * 0.5 + ellipse_score * 0.5
@@ -423,7 +426,7 @@ class GraspDetector:
         cv2.putText(img, f"{final_score[target_index]:.2f}", (centers[target_index][0] + 5, centers[target_index][1] + 5), cv2.FONT_HERSHEY_DUPLEX, 0.5, (255, 255, 255), 1)
         cv2.ellipse(img, ellipse_list[target_index], (0, 255, 255), 3)
 
-        return target_index, img
+        return target_index, img, max(final_score)
 
 
 
@@ -456,6 +459,8 @@ class InsertionCalculator:
         return v_mm
     
     def get_target_index(self, contours):
+        print(type(contours))
+        print(contours.dtype)
         center_w = self.w / 2
         center_h = self.h / 2
         point = (center_w, center_h)
@@ -546,14 +551,14 @@ class InsertionCalculator:
 
         print("index : ", self.index)
  
-        cabbage_size_mm = self._convert_px_to_mm(max(ellipse[1][0], ellipse[1][1]), center_d)
+        self.cabbage_size_mm = self._convert_px_to_mm(max(ellipse[1][0], ellipse[1][1]), center_d)
 
         # 画像中心にキャベツが見つからなかったとき
         if self.index == -1:
             center_d = -1
 
 
-        return xytr_list, center, center_d, finger_radius_px, cabbage_size_mm
+        return xytr_list, center, center_d, finger_radius_px, self.cabbage_size_mm
     
     def point_average_depth(self, hi, wi, depth: Image, finger_radius_px):
         mask = np.zeros_like(depth)
@@ -566,6 +571,7 @@ class InsertionCalculator:
         # center_d = depth[self.h // 2, self.w // 2]
         # center_d = 600 # TODO
 
+        print("in calculate")
         xytr_list, center, center_d, finger_radius_px, cabbage_size_mm = self.get_xytr_list(depth, contours, centers)
 
         max_score = -1
@@ -630,6 +636,13 @@ class InsertionCalculator:
         return best_x, best_y, best_t, best_r, center_d
 
 
+    def compute_cabbage_angle(self, ratio, a):
+        return np.arccos((2 * ratio * ratio - 1 - a * a) / (1 - a * a)) / 2
+
+    def compute_cabbage_angle_reverse(self, angle, a):
+        return np.sqrt(((1 - a*a) * np.cos(2 * angle) + 1 + a*a) / 2)
+
+
     def get_major_minor_ratio(self, contours):
 
 
@@ -639,15 +652,15 @@ class InsertionCalculator:
             a, b = b, a
         return b / a
     
-    def get_access_distance(self, contours, depth):
+    def get_access_distance(self, contours):
         if self.index == -1:
             return -1
         
         ratio  = self.get_major_minor_ratio(contours)
-        # TMP
-        # 0.6 というのは一番キャベツが立っているときの
-        # 長軸と短軸の比として設定している
-        return max(ratio - 0.6, 0) / 0.4 * 30 / 1000
+        a = 0.6 # キャベツの長軸に対する短軸の長さの比
+        angle = self.compute_cabbage_angle(ratio, a)
+
+        return (1 - self.compute_cabbage_angle_reverse(np.pi / 2 - angle, a)) * self.cabbage_size_mm / 2
 
 
     def drawResult(self, img, contours, x, y, t, r, d):

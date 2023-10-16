@@ -77,7 +77,7 @@
     <group if="$(arg show_view)">
         <!-- <node name="depth_view" pkg="rqt_image_view" type="rqt_image_view" args="$(arg depth_topic)" /> -->
         <node name="seg_view" pkg="rqt_image_view" type="rqt_image_view" args="$(arg seg_topic)" />
-        <node name="cnds_view" pkg="rqt_image_view" type="rqt_image_view" args="$(arg candidates_img_topic)" />
+        <node name="grasp_view" pkg="rqt_image_view" type="rqt_image_view" args="/grasp_detection_server_result" />
     </group>
 
     <group if="$(arg use_bag)">

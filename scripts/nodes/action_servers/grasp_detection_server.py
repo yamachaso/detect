@@ -213,7 +213,7 @@ class GraspDetectionServer:
 
             print("result loop")
 
-            target_index, result_img = self.grasp_detector.detect(img, depth, centers, contours, masks) # 一番スコアの良いキャベツのインデックス
+            target_index, result_img, score = self.grasp_detector.detect(img, depth, centers, contours, masks) # 一番スコアの良いキャベツのインデックス
 
             self.result_publisher.publish(result_img, frame_id, stamp)
        
@@ -239,6 +239,9 @@ class GraspDetectionServer:
             # 絶対値が最も小さい角度
             # nearest_angle = self.augment_angles(angle)[0]
             nearest_angle = 0
+
+            print(type(score))
+            print(score)
             object = DetectedObject(
                 # points=insertion_points_msg,
                 center_pose=center_pose_stamped_msg,
@@ -247,7 +250,7 @@ class GraspDetectionServer:
                 # long_radius=long_radius_3d,
                 length_to_center=length_to_center,
                 # score=best_cand.total_score,
-                score=scores[target_index],
+                score=score,
 
             )
 
@@ -332,15 +335,21 @@ class GraspDetectionServer:
             # print(instances[0].contour)
             print(type(instances[0].contour))
 
-            contours = np.array([multiarray2numpy(int, np.int32, instance_msg.contour) for instance_msg in instances], dtype=object)
+            # contours = np.array([multiarray2numpy(int, np.int32, instance_msg.contour) for instance_msg in instances], dtype=object)
+            contours = np.array([multiarray2numpy(int, np.int32, instance_msg.contour) for instance_msg in instances])
+            print("$$$$")
             centers = np.array([np.array(instance_msg.center) for instance_msg in instances])
 
+            print("####")
+
             ic_result = self.insertion_calculator.calculate(depth, contours, centers)
+
+            print("aaaa")
 
             x, y, t, r, d = ic_result # r はmm単位
 
             # 把持のとき、ハンドとキャベツをどのくらい離すか？
-            access_distance = self.insertion_calculator.get_access_distance(contours, d)
+            access_distance = self.insertion_calculator.get_access_distance(contours)
 
             success = True
             if d < 0:
