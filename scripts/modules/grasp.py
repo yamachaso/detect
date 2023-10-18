@@ -637,6 +637,9 @@ class InsertionCalculator:
 
 
     def compute_cabbage_angle(self, ratio, a):
+        # ratioはa ~ 1である必要あり
+        ratio = min(ratio, 1.0)
+        ratio = max(ratio, a) 
         return np.arccos((2 * ratio * ratio - 1 - a * a) / (1 - a * a)) / 2
 
     def compute_cabbage_angle_reverse(self, angle, a):

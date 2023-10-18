@@ -44,7 +44,9 @@
     <!-- <remap from="/device_0/sensor_0/Depth_0/depth/data" to="/$(arg used_camera)/depth/image_raw" /> -->
     <!-- <remap from="/device_0/sensor_0/Depth_0/info/camera_info" to="/$(arg used_camera)/depth/camera_info" /> -->
 
-    <param name="use_sim_time" value="true" />
+    <!-- /clockがないにもかかわらずuse_sim_timeがtrueだとrospy.sleepでブロックがかかる ref: https://github.com/ros/ros_comm/issues/2111 -->
+    <!-- <param name="use_sim_time" value="true" /> -->
+    <param name="use_sim_time" value="false" />
 
     <param name="fps" value="$(arg fps)" />
     <param name="device" value="$(arg device)" />
