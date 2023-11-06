@@ -145,7 +145,12 @@ class GraspDetectionServer:
 
         return vis_base_img_msg, flont_indexes
 
-    def compute_object_center_pose_stampd(self, depth, mask, c_3d_c_on_surface, header):
+    # def compute_object_center_point_stampd(self, c_3d_c_on_surface, header):
+    #     c_3d_c = Point(c_3d_c_on_surface.x, c_3d_c_on_surface.y, c_3d_c_on_surface.z)
+    #     c_3d_w = self.tf_client.transform_point(header, c_3d_c)
+    #     return c_3d_w
+        
+    def compute_object_center_pose_stampd(self, c_3d_c_on_surface, header):
         c_3d_c = Point(c_3d_c_on_surface.x, c_3d_c_on_surface.y, c_3d_c_on_surface.z)
         c_3d_w = self.tf_client.transform_point(header, c_3d_c)
         # TMP とりあえず使ってないので無視
@@ -190,6 +195,62 @@ class GraspDetectionServer:
     
         return (centers, contours, masks)
 
+
+    def distance_point_between_line(self, px, py, x1, y1, x2, y2):
+        a = y2 - y1
+        b = x1 - x2
+        c = -x1 * y2 + x2 * y1
+        return np.abs(a * px + b * py + c) / np.sqrt(a * a + b * b)
+
+    # def check_wall_contact(self, pose_stamped_msg):
+    def check_wall_contact(self, pose_stamped_msg):
+        px = pose_stamped_msg.pose.position.x
+        py = pose_stamped_msg.pose.position.y
+        # px = point_stamped_msg.point.x
+        # py = point_stamped_msg.point.y
+
+        header = Header()
+        header.frame_id = "container_br"
+        br_point = self.tf_client.transform_point(header, Point()).point      
+        header.frame_id = "container_tr"
+        tr_point = self.tf_client.transform_point(header, Point()).point
+        header.frame_id = "container_tl"
+        tl_point = self.tf_client.transform_point(header, Point()).point
+        header.frame_id = "container_bl"
+        bl_point = self.tf_client.transform_point(header, Point()).point
+        br_x, br_y = br_point.x, br_point.y
+        tr_x, tr_y = tr_point.x, tr_point.y
+        tl_x, tl_y = tl_point.x, tl_point.y
+        bl_x, bl_y = bl_point.x, bl_point.y
+
+
+        contact_dis = 0.25 # 25cm以内だったらコンテナと接触している
+        r, t, l, b = 1, 2, 4, 8
+        res = 0
+
+        if self.distance_point_between_line(px, py, br_x, br_y, tr_x, tr_y) < contact_dis:
+            res |= r
+        if self.distance_point_between_line(px, py, tr_x, tr_y, tl_x, tl_y) < contact_dis:
+            res |= t
+        if self.distance_point_between_line(px, py, tl_x, tl_y, bl_x, bl_y) < contact_dis:
+            res |= l
+        if self.distance_point_between_line(px, py, bl_x, bl_y, br_x, br_y) < contact_dis:
+            res |= b
+
+        wall_distance = 100000000
+        wall_distance = min(wall_distance, self.distance_point_between_line(px, py, br_x, br_y, tr_x, tr_y))
+        wall_distance = min(wall_distance, self.distance_point_between_line(px, py, tr_x, tr_y, tl_x, tl_y))
+        wall_distance = min(wall_distance, self.distance_point_between_line(px, py, tl_x, tl_y, bl_x, bl_y))
+        wall_distance = min(wall_distance, self.distance_point_between_line(px, py, bl_x, bl_y, br_x, br_y))
+
+        print("wall_distance", wall_distance)
+
+        # if wall_distance < 0.25:
+        #     return True
+        # else:
+        #     return False
+        return res
+
     def callback(self, goal: GraspDetectionGoal):
         print("receive request")
         img_msg = goal.image
@@ -219,7 +280,6 @@ class GraspDetectionServer:
        
 
             c_3d_c_on_surface = self.projector.screen_to_camera_2(points_msg, centers[target_index])
-            print("e")
             # insertion_points_c = [self.projector.screen_to_camera(uv, d_mm) for uv, d_mm in best_cand.get_insertion_points_uvd()]
             # c_3d_c_on_surface = self.projector.screen_to_camera(*best_cand.get_center_uvd())
             # compute approach distance
@@ -229,7 +289,29 @@ class GraspDetectionServer:
             print("trans before")
             # insertion_points_msg = [pt.point for pt in self.tf_client.transform_points(header, insertion_points_c)]
             print("trans after")
-            center_pose_stamped_msg = self.compute_object_center_pose_stampd(depth, masks[target_index], c_3d_c_on_surface, header)
+
+            
+            center_pose_stamped_msg = self.compute_object_center_pose_stampd(c_3d_c_on_surface, header)
+            # center_pose_stamped_msg = self.compute_object_center_pose_stampd(depth, masks[target_index], c_3d_c_on_surface, header)
+
+            contact = self.check_wall_contact(center_pose_stamped_msg)
+
+            print("center_pose_stamped_msg before : ", center_pose_stamped_msg)
+
+            r, t, l, b = 1, 2, 4, 8
+            if contact & r:
+                center_pose_stamped_msg.pose.position.y += 0.015
+            if contact & t:
+                center_pose_stamped_msg.pose.position.x -= 0.015
+            if contact & l:
+                center_pose_stamped_msg.pose.position.y -= 0.015
+            if contact & b:
+                center_pose_stamped_msg.pose.position.x += 0.015
+
+            print("center_pose_stamped_msg after : ", center_pose_stamped_msg)
+
+            rospy.logerr("aaaaa")
+            print("CONTACT : ", contact)
 
             # compute 3d radiuses
             # short_radius_3d, long_radius_3d = self.compute_object_3d_radiuses(depth, bbox_handler)
@@ -337,14 +419,9 @@ class GraspDetectionServer:
 
             # contours = np.array([multiarray2numpy(int, np.int32, instance_msg.contour) for instance_msg in instances], dtype=object)
             contours = np.array([multiarray2numpy(int, np.int32, instance_msg.contour) for instance_msg in instances])
-            print("$$$$")
             centers = np.array([np.array(instance_msg.center) for instance_msg in instances])
 
-            print("####")
-
             ic_result = self.insertion_calculator.calculate(depth, contours, centers)
-
-            print("aaaa")
 
             x, y, t, r, d = ic_result # r はmm単位
 
@@ -352,6 +429,7 @@ class GraspDetectionServer:
             access_distance = self.insertion_calculator.get_access_distance(contours)
 
             success = True
+            print("DDDDD:", d)
             if d < 0:
                 success = False
 
@@ -385,13 +463,13 @@ class GraspDetectionServer:
 
 
 
-                point_msg = self.tf_client.transform_point(header, c_3d_c_on_surface)
+                point_stamped_msg = self.tf_client.transform_point(header, c_3d_c_on_surface)
 
                 print("point_msg")
-                print(point_msg)
+                print(point_stamped_msg)
 
                 pose_msg = Pose(
-                    position=point_msg.point
+                    position=point_stamped_msg.point
                 )
     
                 # angle = t

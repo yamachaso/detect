@@ -14,7 +14,9 @@
     <arg name="hand_radius_mm" default="100" />
     <arg name="finger_radius_mm" default="15" />
     <!-- <arg name="hand_mount_rotation" default="45" /> -->
-    <arg name="hand_mount_rotation" default="60" />
+    <!-- <arg name="hand_mount_rotation" default="60" /> -->
+    <arg name="hand_mount_rotation" default="75" /> <!-- カメラの回転45° + 指の世界座標系y軸に対する角度30° -->
+    <!-- <arg name="hand_mount_rotation" default="30" /> -->
     <!-- <arg name="hand_mount_rotation" default="0" /> -->
     <arg name="approach_coef" default="1.0" />
     <arg name="elements_th" default="0." />
