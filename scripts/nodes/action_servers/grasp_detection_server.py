@@ -28,6 +28,7 @@ from std_msgs.msg import Header
 from modules.ros.publishers import ImageMatPublisher
 
 from modules.const import CONFIGS_PATH, DATASETS_PATH, OUTPUTS_PATH
+from modules.colored_print import *
 from scipy import optimize
 
 
@@ -252,7 +253,7 @@ class GraspDetectionServer:
         return res
 
     def callback(self, goal: GraspDetectionGoal):
-        print("receive request")
+        printb("grasp detect callback called")
         img_msg = goal.image
         depth_msg = goal.depth
         points_msg = goal.points
@@ -270,9 +271,6 @@ class GraspDetectionServer:
             (centers, contours, masks) = self.instances2centers_contours_masks(depth, instances)
 
 
-            # 把持候補の生成 (並列処理)
-
-            print("result loop")
 
             target_index, result_img, score = self.grasp_detector.detect(img, depth, centers, contours, masks) # 一番スコアの良いキャベツのインデックス
 
@@ -286,17 +284,13 @@ class GraspDetectionServer:
             # length_to_center = self.compute_approach_distance(c_3d_c_on_surface, insertion_points_c)
             length_to_center = 0.2
             # compute center pose stamped (world coords)
-            print("trans before")
             # insertion_points_msg = [pt.point for pt in self.tf_client.transform_points(header, insertion_points_c)]
-            print("trans after")
 
             
             center_pose_stamped_msg = self.compute_object_center_pose_stampd(c_3d_c_on_surface, header)
             # center_pose_stamped_msg = self.compute_object_center_pose_stampd(depth, masks[target_index], c_3d_c_on_surface, header)
 
             contact = self.check_wall_contact(center_pose_stamped_msg)
-
-            print("center_pose_stamped_msg before : ", center_pose_stamped_msg)
 
             r, t, l, b = 1, 2, 4, 8
             if contact & r:
@@ -308,21 +302,15 @@ class GraspDetectionServer:
             if contact & b:
                 center_pose_stamped_msg.pose.position.x += 0.015
 
-            print("center_pose_stamped_msg after : ", center_pose_stamped_msg)
-
-            rospy.logerr("aaaaa")
-            print("CONTACT : ", contact)
+            printc("CONTACT : {}".format(contact))
 
             # compute 3d radiuses
             # short_radius_3d, long_radius_3d = self.compute_object_3d_radiuses(depth, bbox_handler)
             short_radius_3d, long_radius_3d = 0, 0
-            print("compute_object_3d_radiuses after")
   
             # 絶対値が最も小さい角度
             # nearest_angle = self.augment_angles(angle)[0]
             nearest_angle = 0
-
-            print(type(score))
             print(score)
             object = DetectedObject(
                 # points=insertion_points_msg,
@@ -401,7 +389,7 @@ class GraspDetectionServer:
         return pressure
 
     def callback2(self, goal: CalcurateInsertionGoal):
-        print("callback2 called")
+        printb("calculate insertion callback called")
         img_msg = goal.image
         depth_msg = goal.depth
         points_msg = goal.points
@@ -415,7 +403,7 @@ class GraspDetectionServer:
             instances = self.is_client.predict(img_msg) # List[Instance]
             # TODO: depthしきい値を求めるためにmerged_maskが必要だが非効率なので要改善
             # print(instances[0].contour)
-            print(type(instances[0].contour))
+            # print(type(instances[0].contour))
 
             # contours = np.array([multiarray2numpy(int, np.int32, instance_msg.contour) for instance_msg in instances], dtype=object)
             contours = np.array([multiarray2numpy(int, np.int32, instance_msg.contour) for instance_msg in instances])
@@ -465,8 +453,8 @@ class GraspDetectionServer:
 
                 point_stamped_msg = self.tf_client.transform_point(header, c_3d_c_on_surface)
 
-                print("point_msg")
-                print(point_stamped_msg)
+                # print("point_msg")
+                # print(point_stamped_msg)
 
                 pose_msg = Pose(
                     position=point_stamped_msg.point
@@ -481,13 +469,13 @@ class GraspDetectionServer:
 
                 spent = time() - start_time
                 # print(f"stamp: {stamp.to_time()}, spent: {spent:.3f}, objects: {len(objects)} ({len(instances)})")
-                print(f"stamp: {stamp.to_time()}, spent: {spent:.3f}, angle: {nearest_angle}")
+                printy(f"stamp: {stamp.to_time()}, spent: {spent:.3f}, angle: {nearest_angle}")
 
             else:
                 pose_msg = Pose()
                 nearest_angle = 0
                 pressure = 0
-                print("callback2 failed...")
+                printr("callback2 failed...")
 
             self.server2.set_succeeded(CalcurateInsertionResult(pose_msg, nearest_angle, access_distance, pressure, success))
 
