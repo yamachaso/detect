@@ -292,17 +292,17 @@ class GraspDetectionServer:
 
             contact = self.check_wall_contact(center_pose_stamped_msg)
 
-            r, t, l, b = 1, 2, 4, 8
-            if contact & r:
-                center_pose_stamped_msg.pose.position.y += 0.015
-            if contact & t:
-                center_pose_stamped_msg.pose.position.x -= 0.015
-            if contact & l:
-                center_pose_stamped_msg.pose.position.y -= 0.015
-            if contact & b:
-                center_pose_stamped_msg.pose.position.x += 0.015
+            # r, t, l, b = 1, 2, 4, 8
+            # if contact & r:
+            #     center_pose_stamped_msg.pose.position.y += 0.015
+            # if contact & t:
+            #     center_pose_stamped_msg.pose.position.x -= 0.015
+            # if contact & l:
+            #     center_pose_stamped_msg.pose.position.y -= 0.015
+            # if contact & b:
+            #     center_pose_stamped_msg.pose.position.x += 0.015
 
-            printc("CONTACT : {}".format(contact))
+            # printc("CONTACT : {}".format(contact))
 
             # compute 3d radiuses
             # short_radius_3d, long_radius_3d = self.compute_object_3d_radiuses(depth, bbox_handler)
@@ -321,7 +321,7 @@ class GraspDetectionServer:
                 length_to_center=length_to_center,
                 # score=best_cand.total_score,
                 score=score,
-
+                contact=contact
             )
 
             # self.visualize_client.visualize_candidates(vis_base_img_msg, candidates_list, depth_msg)
