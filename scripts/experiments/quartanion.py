@@ -78,3 +78,60 @@ psi_new = np.degrees(np.arctan2(R_zyx[0, 1], R_zyx[0, 0]))
 # 結果を表示
 print("xyz型のオイラー角（φ, θ, ψ）は", phi, theta, psi, "です。")
 print("zyx型のオイラー角（φ, θ, ψ）は", phi_new, theta_new, psi_new, "です。")
+
+
+# %%
+# 回転行列
+t = np.radians(5)
+
+
+P = np.array([[1, 0, 0],
+              [0, np.cos(t), -np.sin(t)],
+              [0, np.sin(t), np.cos(t)]])
+Q = np.array([[np.cos(t), 0, np.sin(t)],
+              [0, 1, 0],
+              [-np.sin(t), 0, np.cos(t)]])
+
+z = np.array([0, 0, 1])
+np.dot(P, np.dot(Q, z))
+
+# %%
+import math
+
+class ContactOrientationController:
+  def __init__(self):
+    self.angle = 10
+    self.contact_angles = {
+      0 : [np.radians(0), np.radians(0), math.pi],
+      1 : [np.radians(-30), np.radians(0), math.pi + np.radians(-self.angle)], 
+      2 : [np.radians(0), np.radians(self.angle), math.pi],
+      3 : [np.radians(-15), np.radians(self.angle), math.pi + np.radians(-self.angle)],
+      4 : [np.radians(30), np.radians(0), math.pi + np.radians(self.angle)],
+      6 : [np.radians(15), np.radians(self.angle), math.pi + np.radians(self.angle)],
+      8 : [np.radians(60), np.radians(-self.angle), math.pi],
+      9 : [np.radians(-45), np.radians(-self.angle), math.pi + np.radians(-self.angle)],
+      12 : [np.radians(45), np.radians(-self.angle), math.pi + np.radians(self.angle)]
+    }
+    self.z_direction = {}
+    for k, v in self.contact_angles.items():
+      self.z_direction[k] = self.compute_z_direction(v[2], v[1])
+
+  def compute_z_direction(self, xt, yt):
+    P = np.array([[1, 0, 0],
+                  [0, np.cos(xt), -np.sin(xt)],
+                  [0, np.sin(xt), np.cos(xt)]])
+    Q = np.array([[np.cos(yt), 0, np.sin(yt)],
+                  [0, 1, 0],
+                  [-np.sin(yt), 0, np.cos(yt)]])
+
+    z = np.array([0, 0, 1])
+    return np.dot(P, np.dot(Q, z))
+
+coc = ContactOrientationController()
+print(coc.contact_angles)
+print(coc.z_direction)
+
+# 単位ベクトルか確認
+for i in coc.z_direction.values():
+  x, y, z = i
+  print(x*x + y*y + z*z)
