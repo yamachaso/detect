@@ -225,7 +225,7 @@ class GraspDetectionServer:
         bl_x, bl_y = bl_point.x, bl_point.y
 
 
-        contact_dis = 0.25 # 25cm以内だったらコンテナと接触している
+        contact_dis = 0.15 # 15cm以内だったらコンテナと接触している
         r, t, l, b = 1, 2, 4, 8
         res = 0
 
