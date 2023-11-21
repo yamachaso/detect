@@ -32,30 +32,30 @@ from modules.colored_print import *
 from scipy import optimize
 
 
-def process_instance_segmentation_result_routine(depth, instance_msg, detect_func):
-    instance_center = np.array(instance_msg.center)
-    bbox_handler = RotatedBoundingBoxHandler(instance_msg.bbox)
-    contour = multiarray2numpy(int, np.int32, instance_msg.contour)
-    candidates = detect_func(center=instance_center, depth=depth, contour=contour)
-
-    return (candidates, instance_center, bbox_handler)
-
-
-def create_candidates_msg(original_center, valid_candidates, target_index):
-    return Candidates(candidates=[
-        Candidate(
-            PointTuple2D(cnd.get_center_uv()),
-            [PointTuple2D(pt) for pt in cnd.get_insertion_points_uv()],
-            [PointTuple2D(pt) for pt in cnd.get_contact_points_uv()],
-            cnd.total_score,
-            cnd.is_valid
-        )
-        for cnd in valid_candidates
-    ],
-        # bbox=bbox_handler.msg,
-        center=PointTuple2D(original_center),
-        target_index=target_index
-    )
+# def process_instance_segmentation_result_routine(depth, instance_msg, detect_func):
+#     instance_center = np.array(instance_msg.center)
+#     bbox_handler = RotatedBoundingBoxHandler(instance_msg.bbox)
+#     contour = multiarray2numpy(int, np.int32, instance_msg.contour)
+#     candidates = detect_func(center=instance_center, depth=depth, contour=contour)
+# 
+#     return (candidates, instance_center, bbox_handler)
+# 
+# 
+# def create_candidates_msg(original_center, valid_candidates, target_index):
+#     return Candidates(candidates=[
+#         Candidate(
+#             PointTuple2D(cnd.get_center_uv()),
+#             [PointTuple2D(pt) for pt in cnd.get_insertion_points_uv()],
+#             [PointTuple2D(pt) for pt in cnd.get_contact_points_uv()],
+#             cnd.total_score,
+#             cnd.is_valid
+#         )
+#         for cnd in valid_candidates
+#     ],
+#         # bbox=bbox_handler.msg,
+#         center=PointTuple2D(original_center),
+#         target_index=target_index
+#     )
 
 
 class GraspDetectionServer:
@@ -202,14 +202,8 @@ class GraspDetectionServer:
         b = x1 - x2
         c = -x1 * y2 + x2 * y1
         return np.abs(a * px + b * py + c) / np.sqrt(a * a + b * b)
-
-    # def check_wall_contact(self, pose_stamped_msg):
-    def check_wall_contact(self, pose_stamped_msg):
-        px = pose_stamped_msg.pose.position.x
-        py = pose_stamped_msg.pose.position.y
-        # px = point_stamped_msg.point.x
-        # py = point_stamped_msg.point.y
-
+    
+    def get_corner_coordinate(self):
         header = Header()
         header.frame_id = "container_br"
         br_point = self.tf_client.transform_point(header, Point()).point      
@@ -219,10 +213,32 @@ class GraspDetectionServer:
         tl_point = self.tf_client.transform_point(header, Point()).point
         header.frame_id = "container_bl"
         bl_point = self.tf_client.transform_point(header, Point()).point
-        br_x, br_y = br_point.x, br_point.y
-        tr_x, tr_y = tr_point.x, tr_point.y
-        tl_x, tl_y = tl_point.x, tl_point.y
-        bl_x, bl_y = bl_point.x, bl_point.y
+        
+        return br_point.x, br_point.y, tr_point.x, tr_point.y, tl_point.x, tl_point.y, bl_point.x, bl_point.y 
+
+    # def check_wall_contact(self, pose_stamped_msg):
+    def check_wall_contact(self, pose_stamped_msg):
+        px = pose_stamped_msg.pose.position.x
+        py = pose_stamped_msg.pose.position.y
+        # px = point_stamped_msg.point.x
+        # py = point_stamped_msg.point.y
+
+
+
+        br_x, br_y, tr_x, tr_y, tl_x, tl_y, bl_x, bl_y = self.get_corner_coordinate()
+        # header = Header()
+        # header.frame_id = "container_br"
+        # br_point = self.tf_client.transform_point(header, Point()).point      
+        # header.frame_id = "container_tr"
+        # tr_point = self.tf_client.transform_point(header, Point()).point
+        # header.frame_id = "container_tl"
+        # tl_point = self.tf_client.transform_point(header, Point()).point
+        # header.frame_id = "container_bl"
+        # bl_point = self.tf_client.transform_point(header, Point()).point
+        # br_x, br_y = br_point.x, br_point.y
+        # tr_x, tr_y = tr_point.x, tr_point.y
+        # tl_x, tl_y = tl_point.x, tl_point.y
+        # bl_x, bl_y = bl_point.x, bl_point.y
 
 
         contact_dis = 0.15 # 15cm以内だったらコンテナと接触している
@@ -270,9 +286,9 @@ class GraspDetectionServer:
 
             (centers, contours, masks) = self.instances2centers_contours_masks(depth, instances)
 
+            cor_coos = self.get_corner_coordinate()
 
-
-            target_index, result_img, score = self.grasp_detector.detect(img, depth, centers, contours, masks) # 一番スコアの良いキャベツのインデックス
+            target_index, result_img, score = self.grasp_detector.detect(img, depth, centers, contours, masks, cor_coos) # 一番スコアの良いキャベツのインデックス
 
             self.result_publisher.publish(result_img, frame_id, stamp)
        

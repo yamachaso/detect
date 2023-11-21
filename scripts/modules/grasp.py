@@ -66,8 +66,27 @@ class GraspDetector:
 
     def compute_insertion_points(self, center: ImagePointUV, base_finger_v: np.ndarray):
         return self._compute_rotated_points(center, base_finger_v, self.base_angle)
+    
+    def distance_point_between_line(self, px, py, x1, y1, x2, y2):
+        a = y2 - y1
+        b = x1 - x2
+        c = -x1 * y2 + x2 * y1
+        return np.abs(a * px + b * py + c) / np.sqrt(a * a + b * b)
 
-    def detect(self, img: Image, depth: Image, centers, contours, masks):
+
+    def get_min_distance_with_wall(self, center, cor_coors):
+        px, py = center
+        br_x, br_y, tr_x, tr_y, tl_x, tl_y, bl_x, bl_y = cor_coors
+        wall_distance = 100000000
+        wall_distance = min(wall_distance, self.distance_point_between_line(px, py, br_x, br_y, tr_x, tr_y))
+        wall_distance = min(wall_distance, self.distance_point_between_line(px, py, tr_x, tr_y, tl_x, tl_y))
+        wall_distance = min(wall_distance, self.distance_point_between_line(px, py, tl_x, tl_y, bl_x, bl_y))
+        wall_distance = min(wall_distance, self.distance_point_between_line(px, py, bl_x, bl_y, br_x, br_y))
+
+        return wall_distance
+
+
+    def detect(self, img: Image, depth: Image, centers, contours, masks, cor_coos):
         # 単位変換
         depth_list = [depth[center[1]][center[0]] for center in centers]
         max_depth = max(depth_list)
@@ -84,8 +103,15 @@ class GraspDetector:
         min_iou = min(ellipse_iou)
         ellipse_score = (ellipse_iou - min_iou) / (max_iou - min_iou + 0.0001)
 
+        wall_list = [self.get_min_distance_with_wall(center, cor_coos) for center in centers]
+        max_wall = max(wall_list)
+        min_wall = min(wall_list)
+        wall_score = (wall_list - min_wall) / (max_wall - min_wall + 0.0001)
+
         # TMP!!!!!
-        final_score = depth_score * 0.7 + ellipse_score * 0.3
+        final_score = depth_score * 0.6 + ellipse_score * 0.1 + wall_score * 0.3
+
+        printg(wall_score)
 
         target_index = np.argmax(final_score)
 
