@@ -84,6 +84,7 @@ add_action_files(
   GraspDetection.action
   ComputeDepthThreshold.action
   CalcurateInsertion.action
+  ExclusionList.action
 )
 
 #Generate added messages and services with any dependencies listed here
@@ -127,7 +128,7 @@ generate_messages(
 catkin_package(
 #  INCLUDE_DIRS include
 #  LIBRARIES detect
-  CATKIN_DEPENDS message_runtime rospy sensor_msgs std_msgs geometry_msgs
+  CATKIN_DEPENDS message_runtime rospy sensor_msgs std_msgs geometry_msgs actionlib_msgs
 #  DEPENDS system_lib
 )
 

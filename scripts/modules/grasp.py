@@ -86,7 +86,7 @@ class GraspDetector:
         return wall_distance
 
 
-    def detect(self, img: Image, depth: Image, centers, contours, masks, cor_coos):
+    def detect(self, img: Image, depth: Image, centers, contours, masks, cor_coos, exclusion_list):
         # 単位変換
         depth_list = [depth[center[1]][center[0]] for center in centers]
         max_depth = max(depth_list)
@@ -113,7 +113,15 @@ class GraspDetector:
 
         printg(wall_score)
 
-        target_index = np.argmax(final_score)
+        while final_score.size > 0:
+            target_index = np.argmax(final_score)
+            if np.all(np.linalg.norm(centers[target_index] - exclusion_list, axis = 1) > 0.1):
+                break
+            else:
+                final_score = np.delete(final_score, target_index)
+                centers = np.delete(centers, target_index)
+                ellipse_list = np.delete(ellipse_list, target_index)
+                printy("Inappropreate target")
 
         cv2.putText(img, f"{final_score[target_index]:.2f}", (centers[target_index][0] + 5, centers[target_index][1] + 5), cv2.FONT_HERSHEY_DUPLEX, 0.5, (255, 255, 255), 1)
         cv2.ellipse(img, ellipse_list[target_index], (0, 255, 255), 3)

@@ -20,7 +20,7 @@ from modules.image import extract_flont_mask_with_thresh, extract_flont_instance
 from modules.visualize import convert_rgb_to_3dgray
 from modules.ros.action_clients import (ComputeDepthThresholdClient,
                                         InstanceSegmentationClient, TFClient,
-                                        VisualizeClient)
+                                        VisualizeClient, ExclusionListClient)
 from modules.ros.msg_handlers import RotatedBoundingBoxHandler
 from modules.ros.utils import PointProjector, PoseEstimator, multiarray2numpy
 from sensor_msgs.msg import CameraInfo
@@ -94,6 +94,7 @@ class GraspDetectionServer:
         self.cdt_client = ComputeDepthThresholdClient() if enable_depth_filter else None
         self.tf_client = TFClient("base_link") # base_linkの座標系に変換するtf変換クライアント
         self.visualize_client = VisualizeClient()
+        self.el_client = ExclusionListClient()
         # Others
         self.bridge = CvBridge()
         self.projector = PointProjector(cam_info)
@@ -288,7 +289,8 @@ class GraspDetectionServer:
 
             cor_coos = self.get_corner_coordinate()
 
-            target_index, result_img, score = self.grasp_detector.detect(img, depth, centers, contours, masks, cor_coos) # 一番スコアの良いキャベツのインデックス
+            exclusion_list = self.el_client.ref()
+            target_index, result_img, score = self.grasp_detector.detect(img, depth, centers, contours, masks, cor_coos, exclusion_list) # 一番スコアの良いキャベツのインデックス
 
             self.result_publisher.publish(result_img, frame_id, stamp)
        

@@ -8,9 +8,10 @@ from detect.msg import (Candidates, ComputeDepthThresholdAction,
                         InstanceSegmentationAction, InstanceSegmentationGoal,
                         TransformPointAction, TransformPointGoal,
                         VisualizeCandidatesAction, VisualizeCandidatesGoal,
-                        VisualizeTargetAction, VisualizeTargetGoal)
+                        VisualizeTargetAction, VisualizeTargetGoal, 
+                        ExclusionListAction, ExclusionListGoal)
 from geometry_msgs.msg import Point, PointStamped
-from sensor_msgs.msg import Image
+from sensor_msgs.msg import Image, Float32MultiArray
 from std_msgs.msg import Header
 
 
@@ -84,3 +85,21 @@ class ComputeDepthThresholdClient(SimpleActionClient):
         self.send_goal_and_wait(ComputeDepthThresholdGoal(depth, whole_mask, n))
         res = self.get_result().threshold
         return res
+
+class ExclusionListClient(SimpleActionClient):
+    def __init__(self, ns="exclusion_list_server", ActionSpec=ExclusionListAction):
+        super().__init__(ns, ActionSpec)
+        self.wait_for_server()
+
+    def add(self, new_point: Float32MultiArray) -> List:
+        self.send_goal_and_wait(ExclusionListGoal(new_point, False, False))
+        res = self.get_result().data
+        return res
+    
+    def ref(self) -> None:
+        self.send_goal_and_wait(ExclusionListGoal([0, 0], True, False))
+        res = self.get_result().data
+        return res
+    
+    def clear(self) -> None:
+        self.send_goal_and_wait(ExclusionListGoal([0, 0], False, True))
