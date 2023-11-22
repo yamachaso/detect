@@ -64,6 +64,7 @@ add_message_files(
   Candidates.msg
   PointTuple2D.msg
   GraspDetectionDebugInfo.msg
+  HandSpeedDirection.msg
 )
 
 # Generate services in the 'srv' folder
@@ -82,6 +83,7 @@ add_action_files(
   InstanceSegmentation.action
   GraspDetection.action
   ComputeDepthThreshold.action
+  CalcurateInsertion.action
 )
 
 #Generate added messages and services with any dependencies listed here

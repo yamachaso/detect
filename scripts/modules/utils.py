@@ -6,6 +6,8 @@ import scipy.stats as stats
 # ref: http://blog.graviness.com/?eid=949269
 def smirnov_grubbs(data, alpha):
     x, outlier_indexes = list(data), []
+    if len(x) < 5:
+        return outlier_indexes
     while True:
         n = len(x)
         t = stats.t.isf(q=(alpha / n) / 2, df=n - 2)
@@ -18,4 +20,5 @@ def smirnov_grubbs(data, alpha):
             break
         outlier_indexes.append(i_far)
         x.pop(i_far)
-    return outlier_indexes
+    # return outlier_indexes # TMP
+    return []

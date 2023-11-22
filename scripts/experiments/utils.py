@@ -32,6 +32,7 @@ class RealsenseBagHandler:
 
         # RGBの最大解像度はもっと高いが指定できない、録画時の設定の問題？
         self.config.enable_stream(rs.stream.color, w, h, rs.format.rgb8, fps)
+        # self.config.enable_stream(rs.stream.depth, 640, 480, rs.format.z16, fps)
         self.config.enable_stream(rs.stream.depth, 848, 480, rs.format.z16, fps)
 
         self.align = rs.align(align_to)

@@ -62,7 +62,12 @@ class PredictResult:
 
         # NMSで除去できない不良インスタンスの除去
         outlier_indexes = smirnov_grubbs(areas, 0.05)
-        print(outlier_indexes)
+
+        # スコア95%以上のみOK
+        for i in range(mask_array.shape[0]):
+            if self.scores[i] < 0.95:
+                outlier_indexes.append(i)
+        
         valid_indexes = [i for i in range(
             mask_array.shape[0]) if i not in outlier_indexes]
 

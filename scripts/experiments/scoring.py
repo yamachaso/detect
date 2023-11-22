@@ -1,4 +1,47 @@
 # %%
+from typing import List, Tuple, Union
+
+import cv2
+import numpy as np
+from torch import Tensor
+
+class BinaryMask:
+    """
+    mask: 1 or 255, (n, h, w)
+    contour: used to calculate other values
+    """
+
+    def __init__(self, mask: Union[np.ndarray, Tensor]):
+        self.mask: np.ndarray = np.asarray(mask, dtype=np.uint8)
+        self.contour = self._compute_contour()
+
+    # private
+    def _compute_contour(self):
+        contours, _ = cv2.findContours(
+            self.mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+        if len(contours) > 1:
+            contour = max(contours, key=lambda x: cv2.contourArea(x))
+        else:
+            contour = contours[0]
+
+        return contour
+    
+    def get_contour(self):
+        return self.contour
+
+    def get_center(self):
+        mu = cv2.moments(self.contour)
+        center = np.array([int(mu["m10"] / mu["m00"]), int(mu["m01"] / mu["m00"])])
+        return np.int0(np.rint(center))
+
+    def get_rotated_bbox(self):
+        # (upper_left, upper_right, lower_right, lower_left)
+        return np.int0(np.rint(cv2.boxPoints(cv2.minAreaRect(self.contour))))
+
+    def get_area(self):
+        return cv2.contourArea(self.contour)
+
+# %%
 from typing import Any, Tuple, TypedDict, Union
 
 import cv2
@@ -18,7 +61,8 @@ class Instances(RawInstances):
 
     def __init__(self, image_size: Tuple[int, int], **kwargs: Any):
         super().__init__(image_size, **kwargs)
-        self.boxes: Boxes
+        # self.boxes: Boxes
+        self.pred_boxes: Boxes
         self.pred_masks: Tensor
         self.scores: Tensor
         self.pred_classes: Tensor
@@ -38,10 +82,14 @@ class PredictResult:
     def __init__(self, outputs_dict: OutputsDictType, device: str = "cpu"):
         self._instances: Instances = outputs_dict['instances'].to(device)
 
+        self.boxes: np.ndarray = self._instances.pred_boxes.tensor.numpy()
+
         self.scores: np.ndarray = self._instances.scores.numpy()
         self.labels: np.ndarray = self._instances.pred_classes.numpy()
 
+        # uint8 : 0 ~ 255
         mask_array: np.ndarray = self._instances.pred_masks.numpy().astype("uint8")
+
 
         # rotated_bboxの形式は(center, weight, height, angle)の方がよい？
         # radiusも返すべき？
@@ -56,7 +104,7 @@ class PredictResult:
             closing_mask = cv2.morphologyEx(
                 each_mask.mask, cv2.MORPH_CLOSE, np.ones((10, 10), np.uint8))
             masks.append(closing_mask)
-            contours.append(each_mask.contour)
+            contours.append(each_mask.get_contour())
             centers.append(each_mask.get_center())
             bboxes.append(each_mask.get_rotated_bbox())
             areas.append(each_mask.get_area())
@@ -64,12 +112,6 @@ class PredictResult:
         # NMSで除去できない不良インスタンスの除去
         outlier_indexes = smirnov_grubbs(areas, 0.05)
         print(outlier_indexes)
-   
-        for i in range(mask_array.shape[0]):
-            if self.scores[i] < 0.95:
-                outlier_indexes.append(i)
-        print(outlier_indexes)
-
         valid_indexes = [i for i in range(
             mask_array.shape[0]) if i not in outlier_indexes]
 
@@ -80,7 +122,6 @@ class PredictResult:
         self.centers = np.array(centers)[valid_indexes]
         self.bboxes = np.array(bboxes)[valid_indexes]
         self.areas = np.array(areas)[valid_indexes]
-        self.mask_array_shape = (20, 30)
 
     def draw_instances(self, img, metadata={}, scale=0.5, instance_mode=ColorMode.IMAGE_BW, targets: Union[list, np.ndarray, None] = None):
         v = Visualizer(
@@ -106,13 +147,15 @@ class Predictor:
         parsed_outputs = PredictResult(outputs)
         return parsed_outputs
 
+
+
+# %%
 from glob import glob
 
 import cv2
 import matplotlib.pyplot as plt
 import numpy as np
 from detectron2.config import get_cfg
-# from entities.predictor import Predictor
 from modules.const import CONFIGS_PATH, OUTPUTS_PATH, SAMPLES_PATH
 from modules.grasp import GraspDetector
 from modules.image import (compute_optimal_depth_thresh,
@@ -122,6 +165,7 @@ from modules.image import (compute_optimal_depth_thresh,
 from modules.visualize import convert_rgb_to_3dgray, get_color_by_score
 from utils import RealsenseBagHandler, imshow
 
+# %%
 config_path = f"{CONFIGS_PATH}/config.yaml"
 weight_path = f"{OUTPUTS_PATH}/mask_rcnn/model_final.pth"
 device = "cuda:0"
@@ -136,6 +180,7 @@ cfg.MODEL.WEIGHTS = weight_path
 cfg.MODEL.DEVICE = device
 
 predictor = Predictor(cfg)
+# %%
 path = glob(f"{SAMPLES_PATH}/realsense_viewer_bags/*")[0]
 handler = RealsenseBagHandler(path, 640, 480, 30)
 
@@ -144,20 +189,21 @@ print(img.dtype, depth.dtype)
 fig, axes = plt.subplots(1, 2)
 axes[0].imshow(img)
 axes[1].imshow(depth, cmap="binary")
-cv2.imwrite('after_Lena.jpg', img)
-
+# cv2.imwrite('after_Lena.jpg', img)
+depth.shape
+# %%
 res = predictor.predict(img)
-# print(res.scores)
 seg = res.draw_instances(img[:, :, ::-1])
 imshow(seg)
 
-print(res.num_instances)
-print(res.mask_array_shape)
-
 # %%
-print(len(res.instances))
-print(res.instances)
-print(res.num_instances)
+fig, axes = plt.subplots(1, 2)
+axes[0].imshow(img)
+axes[1].imshow(depth)
+print(img.max(), img.min())
+print(depth.max(), depth.min())
+# axes[1].imshow(depth, cmap="binary")
+# axes[1].imshow(depth, cmap="binary")
 
 # %%
 masks = res.masks
@@ -271,3 +317,5 @@ test_image= cv2.ellipse(test_image,ellipse,(0,255,0),2)
 imshow(test_image)
 # plt.imshow(test_image)
 # %%
+
+

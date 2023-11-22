@@ -70,6 +70,7 @@ RUN pip3 install torch==1.10 torchvision==0.11.1 -f https://download.pytorch.org
 RUN pip3 install opencv-python
 RUN pip3 install scikit-learn
 RUN pip3 install pyrealsense2
+RUN pip3 install pandas
 
 # RUN pip3 install 'git+https://github.com/facebookresearch/fvcore'
 # install detectron2

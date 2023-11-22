@@ -10,6 +10,10 @@ from entities.predictor import Predictor
 from modules.const import CONFIGS_PATH, OUTPUTS_PATH
 from modules.ros.msg_handlers import InstanceHandler
 from modules.ros.publishers import ImageMatPublisher
+import os
+from datetime import datetime
+import cv2
+from modules.const import CONFIGS_PATH, DATASETS_PATH, OUTPUTS_PATH
 
 
 class InstanceSegmentationServer:
@@ -23,6 +27,9 @@ class InstanceSegmentationServer:
         self.server = SimpleActionServer(name, InstanceSegmentationAction, self.callback, False)
         self.server.start()
 
+        self.count = 0
+        self.now = datetime.now().strftime('%Y-%m-%d-%H-%M-%S')
+
     def callback(self, goal: InstanceSegmentationGoal):
         try:
             img_msg = goal.image
@@ -33,6 +40,13 @@ class InstanceSegmentationServer:
 
             seg = res.draw_instances(img[:, :, ::-1])
             self.seg_publisher.publish(seg, frame_id, stamp)
+
+            # OUTPUT_DIR = f"{OUTPUTS_PATH}/tmp/{self.now}"
+            # os.makedirs(OUTPUT_DIR, exist_ok=True)
+            # os.makedirs(f"{OUTPUT_DIR}/seg", exist_ok=True)
+            # cv2.imwrite(f'{OUTPUT_DIR}/seg/{self.count}.jpg', seg)
+            # self.count += 1
+            
 
             instances = [InstanceHandler.from_predict_result(res, i) for i in range(res.num_instances)]
             result = InstanceSegmentationResult(Header(frame_id=frame_id, stamp=stamp), instances)
@@ -46,8 +60,7 @@ if __name__ == "__main__":
     seg_topic = rospy.get_param("seg_topic")
 
     config_path = rospy.get_param("config", f"{CONFIGS_PATH}/config.yaml")
-    # weight_path = rospy.get_param("weight", f"{OUTPUTS_PATH}/2022_08_04_07_40/model_final.pth")
-    weight_path = rospy.get_param("weight", f"{OUTPUTS_PATH}/2022_10_16_08_01/model_final.pth")
+    weight_path = rospy.get_param("weight", f"{OUTPUTS_PATH}/mask_rcnn/model_final.pth")
     device = rospy.get_param("device", "cuda:0")
 
     cfg = get_cfg()

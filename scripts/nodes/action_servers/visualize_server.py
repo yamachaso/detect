@@ -13,6 +13,11 @@ from modules.ros.publishers import ImageMatPublisher
 from modules.visualize import (convert_rgb_to_3dgray, draw_candidate,
                                get_color_by_score)
 
+import os
+from datetime import datetime
+import cv2
+from modules.const import CONFIGS_PATH, DATASETS_PATH, OUTPUTS_PATH
+
 
 class VisualizeServer:
     def __init__(self, name: str, pub_topic: str, visualize_only_best_cnd: bool):
@@ -34,9 +39,15 @@ class VisualizeServer:
         for server in self.servers:
             server.start()
 
+        ################
+        self.count = 0
+        self.now = datetime.now().strftime('%Y-%m-%d-%H-%M-%S')
+
     def draw_candidates(self, goal: VisualizeCandidatesGoal):
         img_msg = goal.base_image
         img = self.bridge.imgmsg_to_cv2(img_msg)
+        depth_msg = goal.depth_image
+        depth = self.bridge.imgmsg_to_cv2(depth_msg)
         candidates_list: List[Candidates] = goal.candidates_list
         frame_id = img_msg.header.frame_id
         stamp = img_msg.header.stamp
@@ -58,6 +69,24 @@ class VisualizeServer:
                 cv2.circle(res_img, cnd_center_uv, 3, (0, 0, 255), -1, lineType=cv2.LINE_AA)
 
             cv2.circle(res_img, obj_center_uv, 3, (0, 255, 0), -1, lineType=cv2.LINE_AA)
+            dep = depth[obj_center_uv[1]][obj_center_uv[0]]
+            cv2.putText(img,
+                text=f'{dep}',
+                org=obj_center_uv,
+                fontFace=cv2.FONT_HERSHEY_SIMPLEX,
+                fontScale=1.0,
+                color=(0, 200, 0),
+                thickness=2,
+                lineType=cv2.LINE_4)
+         
+
+        #################################
+        # OUTPUT_DIR = f"{OUTPUTS_PATH}/tmp/{self.now}"
+        # os.makedirs(OUTPUT_DIR, exist_ok=True)
+        # os.makedirs(f"{OUTPUT_DIR}/cand", exist_ok=True)
+        # cv2.imwrite(f'{OUTPUT_DIR}/cand/{self.count}.jpg', res_img)
+        # self.count += 1
+        #################################
 
         self.last_image = res_img
         self.last_candidates_list = candidates_list
@@ -66,6 +95,8 @@ class VisualizeServer:
         self.publisher.publish(res_img, frame_id, stamp)
 
     def draw_target(self, goal: VisualizeTargetGoal):
+        if self.last_image is None:
+            return
         """ 一度candidatesを描画した後に使用すること """
         print(f"candidates_list: {len(self.last_candidates_list)}, target: {goal.target_index}")
         if type(self.last_image) is not None:

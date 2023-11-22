@@ -6,18 +6,12 @@
     <arg name="fps" default="1" />
     <arg name="device" default="cuda:0" />
     <arg name="enable_depth_filter" default="true" />
-    <arg name="enable_candidate_filter" default="false" />
-    <!-- <arg name="finger_num" default="4" /> -->
-    <arg name="finger_num" default="3" />
+    <arg name="enable_candidate_filter" default="true" />
+    <arg name="finger_num" default="4" />
     <arg name="unit_angle" default="15" />
-    <!-- <arg name="hand_radius_mm" default="152.5" /> -->
-    <arg name="hand_radius_mm" default="100" />
+    <arg name="hand_radius_mm" default="152.5" />
     <arg name="finger_radius_mm" default="15" />
-    <!-- <arg name="hand_mount_rotation" default="45" /> -->
-    <!-- <arg name="hand_mount_rotation" default="60" /> -->
-    <arg name="hand_mount_rotation" default="75" /> <!-- カメラの回転45° + 指の世界座標系y軸に対する角度30° -->
-    <!-- <arg name="hand_mount_rotation" default="30" /> -->
-    <!-- <arg name="hand_mount_rotation" default="0" /> -->
+    <arg name="hand_mount_rotation" default="45" />
     <arg name="approach_coef" default="1.0" />
     <arg name="elements_th" default="0." />
     <arg name="el_insertion_th" default="0.2" />
@@ -46,9 +40,7 @@
     <!-- <remap from="/device_0/sensor_0/Depth_0/depth/data" to="/$(arg used_camera)/depth/image_raw" /> -->
     <!-- <remap from="/device_0/sensor_0/Depth_0/info/camera_info" to="/$(arg used_camera)/depth/camera_info" /> -->
 
-    <!-- /clockがないにもかかわらずuse_sim_timeがtrueだとrospy.sleepでブロックがかかる ref: https://github.com/ros/ros_comm/issues/2111 -->
-    <!-- <param name="use_sim_time" value="true" /> -->
-    <param name="use_sim_time" value="false" />
+    <param name="use_sim_time" value="true" />
 
     <param name="fps" value="$(arg fps)" />
     <param name="device" value="$(arg device)" />
@@ -81,7 +73,7 @@
     <group if="$(arg show_view)">
         <!-- <node name="depth_view" pkg="rqt_image_view" type="rqt_image_view" args="$(arg depth_topic)" /> -->
         <node name="seg_view" pkg="rqt_image_view" type="rqt_image_view" args="$(arg seg_topic)" />
-        <node name="grasp_view" pkg="rqt_image_view" type="rqt_image_view" args="/grasp_detection_server_result" />
+        <node name="cnds_view" pkg="rqt_image_view" type="rqt_image_view" args="$(arg candidates_img_topic)" />
     </group>
 
     <group if="$(arg use_bag)">
@@ -93,7 +85,7 @@
     <node name="tf_transform_server" pkg="detect" type="tf_transform_server.py" />
     <node name="visualize_server" pkg="detect" type="visualize_server.py" />
     <node name="instance_segmentation_server" pkg="detect" type="instance_segmentation_server.py" />
-    <node name="grasp_detection_server" pkg="detect" type="grasp_detection_server.py" output="screen" />
+    <node name="grasp_detection_server" pkg="detect" type="grasp_detection_server_segnet.py" output="screen" />
     <group if="$(arg enable_depth_filter)">
         <node name="compute_depth_threshold_server" pkg="detect" type="compute_depth_threshold_server.py" output="screen" />
     </group>

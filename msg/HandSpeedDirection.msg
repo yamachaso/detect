@@ -1,0 +1,2 @@
+float64 speed
+geometry_msgs/Vector3 direction
