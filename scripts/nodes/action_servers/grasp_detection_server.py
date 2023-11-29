@@ -288,8 +288,8 @@ class GraspDetectionServer:
             (centers, contours, masks) = self.instances2centers_contours_masks(depth, instances)
 
             cor_coos = self.get_corner_coordinate()
-
             exclusion_list = self.el_client.ref()
+            printb("exclusion_list : {}".format(exclusion_list))
             target_index, result_img, score = self.grasp_detector.detect(img, depth, centers, contours, masks, cor_coos, exclusion_list) # 一番スコアの良いキャベツのインデックス
 
             self.result_publisher.publish(result_img, frame_id, stamp)

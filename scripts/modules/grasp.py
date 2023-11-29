@@ -115,7 +115,7 @@ class GraspDetector:
 
         while final_score.size > 0:
             target_index = np.argmax(final_score)
-            if np.all(np.linalg.norm(centers[target_index] - exclusion_list, axis = 1) > 20): #TMP
+            if len(exclusion_list) == 0 or np.all(np.linalg.norm(centers[target_index] - exclusion_list, axis = 1) > 20): #TMP
                 break
             else:
                 final_score = np.delete(final_score, target_index)

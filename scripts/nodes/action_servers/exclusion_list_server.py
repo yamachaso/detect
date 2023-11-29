@@ -1,34 +1,41 @@
 #!/usr/bin/env python3
 
 import rospy
+import numpy as np
 from actionlib import SimpleActionServer
-from std_msgs.msg import Header, String
-from ExclusionList.msg import (ExclusionListAction, 
-                                ExclusionListGoal, 
-                                ExclusionListResult)
+from std_msgs.msg import Header, String, Int32MultiArray
+from detect.msg import (ExclusionListAction, 
+                        ExclusionListGoal, 
+                        ExclusionListResult)
+
+from modules.ros.utils import multiarray2numpy, numpy2multiarray
 
 class ExclusionListServer:
     def __init__(self, name: str):
         rospy.init_node(name, log_level=rospy.INFO)
-        self.exclusion_list = []
+        self.exclusion_list = [[-100, -100], [-200, -200]]
 
         self.server = SimpleActionServer(name, ExclusionListAction, self.callback, False)
         self.server.start()
 
     def callback(self, goal: ExclusionListGoal):
         try:
-            new_point = goal.new_point
+            u = goal.u
+            v = goal.v
             ref = goal.ref
             clear = goal.clear
 
-            if clear is True:
+            if clear:
                 self.exclusion_list = []
-            elif ref is True:
+            elif ref:
                 pass
             else:
-                self.exclusion_list.append(new_point)
+                self.exclusion_list.append([u, v])
 
-            result = ExclusionListResult(self.exclusion_list)
+            result = ExclusionListResult(
+                numpy2multiarray(Int32MultiArray, np.array(self.exclusion_list))
+            )
+        
             self.server.set_succeeded(result)
 
         except Exception as err:

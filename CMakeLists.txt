@@ -128,7 +128,7 @@ generate_messages(
 catkin_package(
 #  INCLUDE_DIRS include
 #  LIBRARIES detect
-  CATKIN_DEPENDS message_runtime rospy sensor_msgs std_msgs geometry_msgs actionlib_msgs
+  CATKIN_DEPENDS message_runtime rospy sensor_msgs std_msgs geometry_msgs
 #  DEPENDS system_lib
 )
 

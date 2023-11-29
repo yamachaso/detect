@@ -1,9 +1,7 @@
-# Goal definition
-std_msgs/Float32MultiArray new_point
-std_msgs/Bool ref
-std_msgs/Bool clear
+int32 u
+int32 v
+bool ref
+bool clear
 ---
-# Result definition
-std_msgs/Float32MultiArray[] exclusion_points
+std_msgs/Int32MultiArray exclusion_points
 ---
-# Feedback definition
