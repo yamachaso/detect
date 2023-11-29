@@ -84,6 +84,7 @@ add_action_files(
   GraspDetection.action
   ComputeDepthThreshold.action
   CalcurateInsertion.action
+  ContainerPosition.action
 )
 
 #Generate added messages and services with any dependencies listed here

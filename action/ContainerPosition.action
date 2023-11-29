@@ -1,0 +1,5 @@
+# Emptyは使えない
+std_msgs/Bool data
+---
+geometry_msgs/Point point
+---
