@@ -1,0 +1,7 @@
+int32 u
+int32 v
+bool ref
+bool clear
+---
+std_msgs/Int32MultiArray exclusion_points
+---

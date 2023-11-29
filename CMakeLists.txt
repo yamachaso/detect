@@ -85,6 +85,7 @@ add_action_files(
   ComputeDepthThreshold.action
   CalcurateInsertion.action
   ContainerPosition.action
+  ExclusionList.action
 )
 
 #Generate added messages and services with any dependencies listed here

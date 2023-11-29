@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 from typing import List
+import numpy as np
 
 from actionlib import SimpleActionClient
 from detect.msg import (Candidates, ComputeDepthThresholdAction,
@@ -8,11 +9,12 @@ from detect.msg import (Candidates, ComputeDepthThresholdAction,
                         InstanceSegmentationAction, InstanceSegmentationGoal,
                         TransformPointAction, TransformPointGoal,
                         VisualizeCandidatesAction, VisualizeCandidatesGoal,
-                        VisualizeTargetAction, VisualizeTargetGoal)
+                        VisualizeTargetAction, VisualizeTargetGoal, 
+                        ExclusionListAction, ExclusionListGoal)
 from geometry_msgs.msg import Point, PointStamped
 from sensor_msgs.msg import Image
-from std_msgs.msg import Header
-
+from std_msgs.msg import Header, Int32MultiArray
+from modules.ros.utils import multiarray2numpy
 
 class TFClient(SimpleActionClient):
     def __init__(self, target_frame: str, ns="tf_transform_server", ActionSpec=TransformPointAction):
@@ -84,3 +86,19 @@ class ComputeDepthThresholdClient(SimpleActionClient):
         self.send_goal_and_wait(ComputeDepthThresholdGoal(depth, whole_mask, n))
         res = self.get_result().threshold
         return res
+
+class ExclusionListClient(SimpleActionClient):
+    def __init__(self, ns="exclusion_list_server", ActionSpec=ExclusionListAction):
+        super().__init__(ns, ActionSpec)
+        self.wait_for_server()
+
+    def add(self, u, v) -> None:
+        self.send_goal_and_wait(ExclusionListGoal(u, v, False, False))
+    
+    def ref(self):
+        self.send_goal_and_wait(ExclusionListGoal(0, 0, True, False))
+        res = multiarray2numpy(int, np.int32, self.get_result().exclusion_points)
+        return res
+    
+    def clear(self) -> None:
+        self.send_goal_and_wait(ExclusionListGoal(0, 0, False, True))
