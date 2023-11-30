@@ -215,58 +215,82 @@ class GraspDetectionServer:
         header.frame_id = "container_bl"
         bl_point = self.tf_client.transform_point(header, Point()).point
         
-        return br_point.x, br_point.y, tr_point.x, tr_point.y, tl_point.x, tl_point.y, bl_point.x, bl_point.y 
+        return br_point.x, br_point.y, tr_point.x, tr_point.y, tl_point.x, tl_point.y, bl_point.x, bl_point.y
+    
+    def compute_contours_list(self, img_shape, center, contour):
+        """
+        輪郭と線分の交点座標を取得する
+        TODO: 線分ごとに描画と論理積をとり非効率なので改善方法要検討
+        """
+
+        (x,y),radius = cv2.minEnclosingCircle(contour)
+        radius = int(radius * 2)
+
+        blank_img = np.zeros(img_shape)
+        # クロップ前に計算したcontourをクロップ後の画像座標に変換し描画
+        cnt_img = blank_img.copy()
+        cv2.drawContours(cnt_img, [contour], -1, 255, 1, lineType=cv2.LINE_AA)
+
+        contours_list = []
+
+        for theta_d in range(0, 360, 15):
+            theta_r = np.rad2deg(theta_d)
+            u = int(radius * np.cos(theta_r) + center[0])
+            v = int(radius * np.sin(theta_r) + center[1])
+
+            # クロップ前に計算したlineをクロップ後の画像座標に変換し描画
+            line_img = blank_img.copy()
+            # 斜めの場合、ピクセルが重ならない場合あるのでlineはthicknessを２にして平均をとる
+            line_img = cv2.line(line_img, center, (u, v), 255, 2, lineType=cv2.LINE_AA)
+            # バイナリ画像(cnt_img, line_img)のbitwiseを用いて、contourとlineの交点を検出
+            bitwise_img = blank_img.copy()
+            cv2.bitwise_and(cnt_img, line_img, bitwise_img)
+
+            intersections = [(w, h) for h, w in zip(*np.where(bitwise_img > 0))]  # hw to xy
+            mean_intersection = np.int0(np.round(np.mean(intersections, axis=0)))
+            contours_list.append(mean_intersection)
+
+        return contours_list
 
     # def check_wall_contact(self, pose_stamped_msg):
-    def check_wall_contact(self, pose_stamped_msg):
-        px = pose_stamped_msg.pose.position.x
-        py = pose_stamped_msg.pose.position.y
-        # px = point_stamped_msg.point.x
-        # py = point_stamped_msg.point.y
-
-
-
-        br_x, br_y, tr_x, tr_y, tl_x, tl_y, bl_x, bl_y = self.get_corner_coordinate()
-        # header = Header()
-        # header.frame_id = "container_br"
-        # br_point = self.tf_client.transform_point(header, Point()).point      
-        # header.frame_id = "container_tr"
-        # tr_point = self.tf_client.transform_point(header, Point()).point
-        # header.frame_id = "container_tl"
-        # tl_point = self.tf_client.transform_point(header, Point()).point
-        # header.frame_id = "container_bl"
-        # bl_point = self.tf_client.transform_point(header, Point()).point
-        # br_x, br_y = br_point.x, br_point.y
-        # tr_x, tr_y = tr_point.x, tr_point.y
-        # tl_x, tl_y = tl_point.x, tl_point.y
-        # bl_x, bl_y = bl_point.x, bl_point.y
-
-
-        contact_dis = 0.15 # 15cm以内だったらコンテナと接触している
+    def check_wall_contact(self, contours_3d_list):
+       
+        contact_dis = 0.05 # 15cm以内だったらコンテナと接触している
         r, t, l, b = 1, 2, 4, 8
         res = 0
 
-        if self.distance_point_between_line(px, py, br_x, br_y, tr_x, tr_y) < contact_dis:
-            res |= r
-        if self.distance_point_between_line(px, py, tr_x, tr_y, tl_x, tl_y) < contact_dis:
-            res |= t
-        if self.distance_point_between_line(px, py, tl_x, tl_y, bl_x, bl_y) < contact_dis:
-            res |= l
-        if self.distance_point_between_line(px, py, bl_x, bl_y, br_x, br_y) < contact_dis:
-            res |= b
+        wall_distance_r = 100000000
+        wall_distance_t = 100000000
+        wall_distance_l = 100000000
+        wall_distance_b = 100000000
 
-        wall_distance = 100000000
-        wall_distance = min(wall_distance, self.distance_point_between_line(px, py, br_x, br_y, tr_x, tr_y))
-        wall_distance = min(wall_distance, self.distance_point_between_line(px, py, tr_x, tr_y, tl_x, tl_y))
-        wall_distance = min(wall_distance, self.distance_point_between_line(px, py, tl_x, tl_y, bl_x, bl_y))
-        wall_distance = min(wall_distance, self.distance_point_between_line(px, py, bl_x, bl_y, br_x, br_y))
+        for pose_stamped_msg in contours_3d_list:
+            px = pose_stamped_msg.pose.position.x
+            py = pose_stamped_msg.pose.position.y
+            # px = point_stamped_msg.point.x
+            # py = point_stamped_msg.point.y
 
-        print("wall_distance", wall_distance)
 
-        # if wall_distance < 0.25:
-        #     return True
-        # else:
-        #     return False
+            br_x, br_y, tr_x, tr_y, tl_x, tl_y, bl_x, bl_y = self.get_corner_coordinate()
+
+
+            if self.distance_point_between_line(px, py, br_x, br_y, tr_x, tr_y) < contact_dis:
+                res |= r
+            if self.distance_point_between_line(px, py, tr_x, tr_y, tl_x, tl_y) < contact_dis:
+                res |= t
+            if self.distance_point_between_line(px, py, tl_x, tl_y, bl_x, bl_y) < contact_dis:
+                res |= l
+            if self.distance_point_between_line(px, py, bl_x, bl_y, br_x, br_y) < contact_dis:
+                res |= b
+
+            wall_distance_r = min(wall_distance_r, self.distance_point_between_line(px, py, br_x, br_y, tr_x, tr_y))
+            wall_distance_t = min(wall_distance_t, self.distance_point_between_line(px, py, tr_x, tr_y, tl_x, tl_y))
+            wall_distance_l = min(wall_distance_l, self.distance_point_between_line(px, py, tl_x, tl_y, bl_x, bl_y))
+            wall_distance_b = min(wall_distance_b, self.distance_point_between_line(px, py, bl_x, bl_y, br_x, br_y))
+
+        printb("wall_distance")
+        printb("right : {}, top : {}, left : {}, bottom : {}".format(wall_distance_r, wall_distance_t, wall_distance_l, wall_distance_b))
+
         return res
 
     def callback(self, goal: GraspDetectionGoal):
@@ -287,10 +311,15 @@ class GraspDetectionServer:
 
             (centers, contours, masks) = self.instances2centers_contours_masks(depth, instances)
 
+            printr("center length : {}".format(len(centers)))
+
             cor_coos = self.get_corner_coordinate()
             exclusion_list = self.el_client.ref()
             printc("exclusion_list : {}".format(exclusion_list))
-            target_index, result_img, score = self.grasp_detector.detect(img, depth, centers, contours, masks, cor_coos, exclusion_list) # 一番スコアの良いキャベツのインデックス
+            target_index, result_img, score, centers, contours = self.grasp_detector.detect(img, depth, centers, contours, masks, cor_coos, exclusion_list) # 一番スコアの良いキャベツのインデックス
+
+            printr("center length later: {}".format(len(centers)))
+            printr("contours length later: {}".format(len(contours)))
 
             self.result_publisher.publish(result_img, frame_id, stamp)
        
@@ -308,23 +337,14 @@ class GraspDetectionServer:
             center_pose_stamped_msg = self.compute_object_center_pose_stampd(c_3d_c_on_surface, header)
             # center_pose_stamped_msg = self.compute_object_center_pose_stampd(depth, masks[target_index], c_3d_c_on_surface, header)
 
-            contact = self.check_wall_contact(center_pose_stamped_msg)
+            printb("####")
+            contours_list = self.compute_contours_list(img.shape[:2], centers[target_index], contours[target_index])
+            printb("$$$$")
+            contours_3d_list = [self.compute_object_center_pose_stampd(
+                self.projector.screen_to_camera_2(points_msg, contours_list_i), header
+            ) for contours_list_i in contours_list]
+            contact = self.check_wall_contact(contours_3d_list)
 
-            # r, t, l, b = 1, 2, 4, 8
-            # if contact & r:
-            #     center_pose_stamped_msg.pose.position.y += 0.015
-            # if contact & t:
-            #     center_pose_stamped_msg.pose.position.x -= 0.015
-            # if contact & l:
-            #     center_pose_stamped_msg.pose.position.y -= 0.015
-            # if contact & b:
-            #     center_pose_stamped_msg.pose.position.x += 0.015
-
-            # printc("CONTACT : {}".format(contact))
-
-            # compute 3d radiuses
-            # short_radius_3d, long_radius_3d = self.compute_object_3d_radiuses(depth, bbox_handler)
-            short_radius_3d, long_radius_3d = 0, 0
 
             u, v = centers[target_index]
             point_tuple_2d = PointTuple2D(uv=[u ,v])
