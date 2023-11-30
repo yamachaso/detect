@@ -98,4 +98,5 @@
         <node name="compute_depth_threshold_server" pkg="detect" type="compute_depth_threshold_server.py" output="screen" />
     </group>
     <node name="container_position_server" pkg="detect" type="container_position_server.py" />
+    <node name="exclusion_list_server" pkg="detect" type="exclusion_list_server.py" />
 </launch>

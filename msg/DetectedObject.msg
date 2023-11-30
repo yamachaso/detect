@@ -1,4 +1,5 @@
 # geometry_msgs/Point[] points
+detect/PointTuple2D center
 geometry_msgs/PoseStamped center_pose
 # int32 angle
 # float32 short_radius

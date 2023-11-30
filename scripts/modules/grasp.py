@@ -119,13 +119,12 @@ class GraspDetector:
                 break
             else:
                 final_score = np.delete(final_score, target_index)
-                centers = np.delete(centers, target_index)
-                ellipse_list = np.delete(ellipse_list, target_index)
+                centers = np.delete(centers, target_index, axis=0) # 2次元配列はaxis設定しないと1次元化されてしまう
+                ellipse_list = np.delete(ellipse_list, target_index, axis=0) # 同上
                 printy("Inappropreate target")
 
         cv2.putText(img, f"{final_score[target_index]:.2f}", (centers[target_index][0] + 5, centers[target_index][1] + 5), cv2.FONT_HERSHEY_DUPLEX, 0.5, (255, 255, 255), 1)
         cv2.ellipse(img, ellipse_list[target_index], (0, 255, 255), 3)
-
         return target_index, img, max(final_score)
 
 

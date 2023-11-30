@@ -289,7 +289,7 @@ class GraspDetectionServer:
 
             cor_coos = self.get_corner_coordinate()
             exclusion_list = self.el_client.ref()
-            printb("exclusion_list : {}".format(exclusion_list))
+            printc("exclusion_list : {}".format(exclusion_list))
             target_index, result_img, score = self.grasp_detector.detect(img, depth, centers, contours, masks, cor_coos, exclusion_list) # 一番スコアの良いキャベツのインデックス
 
             self.result_publisher.publish(result_img, frame_id, stamp)
@@ -325,12 +325,15 @@ class GraspDetectionServer:
             # compute 3d radiuses
             # short_radius_3d, long_radius_3d = self.compute_object_3d_radiuses(depth, bbox_handler)
             short_radius_3d, long_radius_3d = 0, 0
-  
+
+            u, v = centers[target_index]
+            point_tuple_2d = PointTuple2D(uv=[u ,v])
             # 絶対値が最も小さい角度
             # nearest_angle = self.augment_angles(angle)[0]
             nearest_angle = 0
             print(score)
             object = DetectedObject(
+                center=point_tuple_2d,
                 # points=insertion_points_msg,
                 center_pose=center_pose_stamped_msg,
                 # angle=nearest_angle,
