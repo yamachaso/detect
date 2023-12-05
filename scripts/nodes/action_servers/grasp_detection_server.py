@@ -122,6 +122,8 @@ class GraspDetectionServer:
 
         self.result_publisher = ImageMatPublisher("/grasp_detection_server_result", queue_size=10)
 
+        self.approach_center_pose_stamped_msg = None
+
 
         rospy.logwarn("finished detection server constructor")
 
@@ -367,6 +369,7 @@ class GraspDetectionServer:
                 contact=contact
             )
 
+            self.approach_center_pose_stamped_msg = center_pose_stamped_msg
             # self.visualize_client.visualize_candidates(vis_base_img_msg, candidates_list, depth_msg)
 
             # if self.dbg_info_publisher:
@@ -430,6 +433,14 @@ class GraspDetectionServer:
         # print("\033[92m{}\033[0m".format("pressure"))
         # print("\033[92m{}\033[0m".format(pressure))
         return pressure
+    
+    def distance_btw_pose_stamped(self, a_msg, b_msg):
+        x = a_msg.pose.position.x - b_msg.pose.position.x
+        y = a_msg.pose.position.y - b_msg.pose.position.y
+        z = a_msg.pose.position.z - b_msg.pose.position.z
+
+        return np.sqrt(x**2 + y**2 + z**2)
+
 
     def callback2(self, goal: CalcurateInsertionGoal):
         printb("calculate insertion callback called")
@@ -452,14 +463,29 @@ class GraspDetectionServer:
             contours = np.array([multiarray2numpy(int, np.int32, instance_msg.contour) for instance_msg in instances])
             centers = np.array([np.array(instance_msg.center) for instance_msg in instances])
 
-            ic_result = self.insertion_calculator.calculate(depth, contours, centers)
+            centers_3d_list = [self.compute_object_center_pose_stampd(
+                self.projector.screen_to_camera_2(points_msg, centers_i), header
+            ) for centers_i in centers]
+
+            distance_list = [self.distance_btw_pose_stamped(self.approach_center_pose_stamped_msg, centers_3d_list_i) for centers_3d_list_i in centers_3d_list]
+
+            target_index = np.argmin(distance_list)
+            success = True
+
+            printc("distance! : {} m".format(distance_list[target_index]))
+            if distance_list[target_index] > 0.1: # 10cm以上異なったらそれは別のキャベツなのでNG
+                success = False
+
+            contour = contours[target_index]
+            center = centers[target_index]
+
+            ic_result = self.insertion_calculator.calculate(depth, contour, center)
 
             x, y, t, r, d = ic_result # r はmm単位
 
             # 把持のとき、ハンドとキャベツをどのくらい離すか？
-            access_distance = self.insertion_calculator.get_access_distance(contours)
+            access_distance = self.insertion_calculator.get_access_distance(contour)
 
-            success = True
             print("DDDDD:", d)
             if d < 0:
                 success = False

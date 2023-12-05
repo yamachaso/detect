@@ -226,10 +226,10 @@ class InsertionCalculator:
             return False
         return True
 
-    def get_xytr_list(self, depth: Image, contours: np.ndarray, centers):
+    def get_xytr_list(self, depth: Image, contour: np.ndarray, center):
         # center_dが欠損すると0 divisionになるので注意
-        self.index = self.get_target_index(contours)
-        center = centers[self.index]
+        # self.index = self.get_target_index(contours)
+        # center = centers[self.index]
         center_d = depth[center[1], center[0]]
 
         # TMP 動作確認
@@ -240,7 +240,7 @@ class InsertionCalculator:
         finger_radius_px = self._convert_mm_to_px(self.finger_radius_mm, center_d)
         # ベクトルははじめの角度求めるとかで関数内部で計算してもいいかも
 
-        ellipse = cv2.fitEllipse(contours[self.index])
+        ellipse = cv2.fitEllipse(contour)
 
         xytr_list = []
         for i in range(self.candidate_num):
@@ -253,12 +253,7 @@ class InsertionCalculator:
  
         self.cabbage_size_mm = self._convert_px_to_mm(max(ellipse[1][0], ellipse[1][1]), center_d)
 
-        # 画像中心にキャベツが見つからなかったとき
-        if self.index == -1:
-            center_d = -1
-
-
-        return xytr_list, center, center_d, finger_radius_px, self.cabbage_size_mm
+        return xytr_list, center_d, finger_radius_px, self.cabbage_size_mm
     
     def point_average_depth(self, hi, wi, depth: Image, finger_radius_px):
         mask = np.zeros_like(depth)
@@ -267,12 +262,12 @@ class InsertionCalculator:
 
         return depth[mask].mean()
     
-    def calculate(self, depth: Image, contours: np.ndarray, centers):
+    def calculate(self, depth: Image, contour: np.ndarray, center):
         # center_d = depth[self.h // 2, self.w // 2]
         # center_d = 600 # TODO
 
         printb("in calculate")
-        xytr_list, center, center_d, finger_radius_px, cabbage_size_mm = self.get_xytr_list(depth, contours, centers)
+        xytr_list, center_d, finger_radius_px, cabbage_size_mm = self.get_xytr_list(depth, contour, center)
 
         max_score = -1
         best_x = -1
@@ -343,20 +338,20 @@ class InsertionCalculator:
         return np.sqrt(((1 - a*a) * np.cos(2 * angle) + 1 + a*a) / 2)
 
 
-    def get_major_minor_ratio(self, contours):
+    def get_major_minor_ratio(self, contour):
 
 
-        ellipse = cv2.fitEllipse(contours[self.index])
+        ellipse = cv2.fitEllipse(contour)
         a, b = ellipse[1]
         if a < b:
             a, b = b, a
         return b / a
     
-    def get_access_distance(self, contours):
-        if self.index == -1:
-            return -1
+    def get_access_distance(self, contour):
+        # if self.index == -1:
+        #     return -1
         
-        ratio  = self.get_major_minor_ratio(contours)
+        ratio  = self.get_major_minor_ratio(contour)
         a = 0.6 # キャベツの長軸に対する短軸の長さの比
         angle = self.compute_cabbage_angle(ratio, a)
 
