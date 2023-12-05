@@ -1,3 +1,4 @@
+int32 arm_index
 sensor_msgs/Image image
 sensor_msgs/Image depth
 sensor_msgs/PointCloud2 points

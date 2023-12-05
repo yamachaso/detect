@@ -92,13 +92,13 @@ class ExclusionListClient(SimpleActionClient):
         super().__init__(ns, ActionSpec)
         self.wait_for_server()
 
-    def add(self, u, v) -> None:
-        self.send_goal_and_wait(ExclusionListGoal(u, v, False, False))
+    def add(self, arm_index, u, v) -> None:
+        self.send_goal_and_wait(ExclusionListGoal(arm_index, u, v, False, False))
     
-    def ref(self):
-        self.send_goal_and_wait(ExclusionListGoal(0, 0, True, False))
+    def ref(self, arm_index):
+        self.send_goal_and_wait(ExclusionListGoal(arm_index, 0, 0, True, False))
         res = multiarray2numpy(int, np.int32, self.get_result().exclusion_points)
         return res
     
-    def clear(self) -> None:
-        self.send_goal_and_wait(ExclusionListGoal(0, 0, False, True))
+    def clear(self, arm_index) -> None:
+        self.send_goal_and_wait(ExclusionListGoal(arm_index, 0, 0, False, True))

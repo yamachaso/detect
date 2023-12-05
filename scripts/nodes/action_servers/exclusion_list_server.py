@@ -13,30 +13,32 @@ from modules.ros.utils import multiarray2numpy, numpy2multiarray
 class ExclusionListServer:
     def __init__(self, name: str):
         rospy.init_node(name, log_level=rospy.INFO)
-        self.exclusion_list = []
+        self.exclusion_list = [[], []]
 
         self.server = SimpleActionServer(name, ExclusionListAction, self.callback, False)
         self.server.start()
 
     def callback(self, goal: ExclusionListGoal):
         try:
+            # 0: left, 1: right
+            arm_index = goal.arm_index
             u = goal.u
             v = goal.v
             ref = goal.ref
             clear = goal.clear
 
             if clear:
-                self.exclusion_list = []
+                self.exclusion_list[arm_index] = []
             elif ref:
                 pass
             else:
-                self.exclusion_list.append([u, v])
+                self.exclusion_list[arm_index].append([u, v])
                 # 5個より多くなったら古いものから削除
-                if len(self.exclusion_list) > 5:
-                    self.exclusion_list.pop(0)
+                if len(self.exclusion_list[arm_index]) > 5:
+                    self.exclusion_list[arm_index].pop(0)
 
             result = ExclusionListResult(
-                numpy2multiarray(Int32MultiArray, np.array(self.exclusion_list))
+                numpy2multiarray(Int32MultiArray, np.array(self.exclusion_list[arm_index]))
             )
         
             self.server.set_succeeded(result)

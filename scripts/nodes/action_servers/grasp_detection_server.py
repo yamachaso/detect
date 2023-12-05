@@ -295,6 +295,8 @@ class GraspDetectionServer:
 
     def callback(self, goal: GraspDetectionGoal):
         printb("grasp detect callback called")
+        # 0: left, 1: right
+        arm_index = goal.arm_index
         img_msg = goal.image
         depth_msg = goal.depth
         points_msg = goal.points
@@ -314,7 +316,7 @@ class GraspDetectionServer:
             printr("center length : {}".format(len(centers)))
 
             cor_coos = self.get_corner_coordinate()
-            exclusion_list = self.el_client.ref()
+            exclusion_list = self.el_client.ref(arm_index)
             printc("exclusion_list : {}".format(exclusion_list))
             target_index, result_img, score, centers, contours = self.grasp_detector.detect(img, depth, centers, contours, masks, cor_coos, exclusion_list) # 一番スコアの良いキャベツのインデックス
 
