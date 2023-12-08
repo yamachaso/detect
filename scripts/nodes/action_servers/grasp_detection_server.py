@@ -491,7 +491,7 @@ class GraspDetectionServer:
                 success = False
 
             if success:
-                img_result = self.insertion_calculator.drawResult(img.copy(), contours, x, y, t, r, d)
+                img_result = self.insertion_calculator.drawResult(img.copy(), contour, x, y, t, r, d)
 
                 frame_id = img_msg.header.frame_id
                 stamp = img_msg.header.stamp

@@ -358,9 +358,8 @@ class InsertionCalculator:
         return (1 - self.compute_cabbage_angle_reverse(np.pi / 2 - angle, a)) * self.cabbage_size_mm / 2
 
 
-    def drawResult(self, img, contours, x, y, t, r, d):
-        index = self.get_target_index(contours)
-        ellipse = cv2.fitEllipse(contours[index])
+    def drawResult(self, img, contour, x, y, t, r, d):
+        ellipse = cv2.fitEllipse(contour)
         cv2.ellipse(img, ellipse,(255,0,0),2)
 
         r = self._convert_mm_to_px(r, d)
