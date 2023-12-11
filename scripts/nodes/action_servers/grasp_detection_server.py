@@ -60,24 +60,16 @@ from scipy import optimize
 
 class GraspDetectionServer:
     def __init__(self, name: str, finger_num: int, unit_angle: int, hand_radius_mm: int, finger_radius_mm: int,
-                 hand_mount_rotation: int, approach_coef: float,
-                 elements_th: float, el_insertion_th: float, el_contact_th: float, el_bw_depth_th: float,
-                 info_topic: str, enable_depth_filter: bool, enable_candidate_filter: bool, debug: bool):
+                 hand_mount_rotation: int, info_topic: str, debug: bool):
+
         rospy.init_node(name, log_level=rospy.INFO)
 
         self.finger_num = finger_num
-        self.unit_angle = unit_angle
         self.base_angle = 360 // finger_num
         self.hand_radius_mm = hand_radius_mm  # length between center and edge
         self.finger_radius_mm = finger_radius_mm
         self.hand_mount_rotation = hand_mount_rotation
-        self.approach_coef = approach_coef
-        self.elements_th = elements_th
-        self.el_insertion_th = el_insertion_th
-        self.el_contact_th = el_contact_th
-        self.el_bw_depth_th = el_bw_depth_th
-        self.enable_candidate_filter = enable_candidate_filter
-        self.debug = debug
+
         cam_info: CameraInfo = rospy.wait_for_message(info_topic, CameraInfo, timeout=None)
         frame_size = (cam_info.height, cam_info.width)
 
@@ -91,9 +83,8 @@ class GraspDetectionServer:
         self.dbg_info_publisher = rospy.Publisher("/grasp_detection_server/result/debug", GraspDetectionDebugInfo, queue_size=10) if debug else None
         # Action Clients
         self.is_client = InstanceSegmentationClient()
-        self.cdt_client = ComputeDepthThresholdClient() if enable_depth_filter else None
+        # self.cdt_client = ComputeDepthThresholdClient() if enable_depth_filter else None
         self.tf_client = TFClient("base_link") # base_linkの座標系に変換するtf変換クライアント
-        self.visualize_client = VisualizeClient()
         self.el_client = ExclusionListClient()
         # Others
         self.bridge = CvBridge()
@@ -101,9 +92,7 @@ class GraspDetectionServer:
         self.pose_estimator = PoseEstimator()
         self.grasp_detector = GraspDetector(finger_num=finger_num, hand_radius_mm=hand_radius_mm,
                                             finger_radius_mm=finger_radius_mm,
-                                            unit_angle=unit_angle, frame_size=frame_size, fp=fp,
-                                            elements_th=elements_th, el_insertion_th=el_insertion_th, 
-                                            el_contact_th=el_contact_th, el_bw_depth_th=el_bw_depth_th)
+                                            unit_angle=unit_angle, frame_size=frame_size, fp=fp)
 
         self.insertion_calculator = InsertionCalculator(finger_num=finger_num, hand_radius_mm=hand_radius_mm,
                                             finger_radius_mm=finger_radius_mm,
@@ -127,27 +116,27 @@ class GraspDetectionServer:
 
         rospy.logwarn("finished detection server constructor")
 
-    def depth_filtering(self, img_msg, depth_msg, img, depth, masks, thresh=0.5, n=5):
-        vis_base_img_msg = img_msg
-        flont_indexes = []
+    # def depth_filtering(self, img_msg, depth_msg, img, depth, masks, thresh=0.5, n=5):
+    #     vis_base_img_msg = img_msg
+    #     flont_indexes = []
 
-        if self.cdt_client:
-            merged_mask = np.where(np.sum(masks, axis=0) > 0, 255, 0).astype("uint8")
-            # depthの欠損対策だがすでに不要
-            # merged_mask = np.where(merged_mask * depth > 0, 255, 0).astype("uint8")
-            whole_mask_msg = self.bridge.cv2_to_imgmsg(merged_mask)
-            opt_depth_th = self.cdt_client.compute(depth_msg, whole_mask_msg, n=n)
-            raw_flont_mask = extract_flont_mask_with_thresh(depth, opt_depth_th, n=n)
-            flont_indexes = extract_flont_instance_indexes(raw_flont_mask, masks, thresh)
-            flont_mask = merge_mask(np.array(masks)[flont_indexes])
-            gray_3c = convert_rgb_to_3dgray(img)
-            reversed_flont_mask = cv2.bitwise_not(flont_mask)
-            base_img = cv2.bitwise_and(img, img, mask=flont_mask) + \
-                cv2.bitwise_and(gray_3c, gray_3c, mask=reversed_flont_mask)
-            vis_base_img_msg = self.bridge.cv2_to_imgmsg(base_img)
-            rospy.loginfo(opt_depth_th)
+    #     if self.cdt_client:
+    #         merged_mask = np.where(np.sum(masks, axis=0) > 0, 255, 0).astype("uint8")
+    #         # depthの欠損対策だがすでに不要
+    #         # merged_mask = np.where(merged_mask * depth > 0, 255, 0).astype("uint8")
+    #         whole_mask_msg = self.bridge.cv2_to_imgmsg(merged_mask)
+    #         opt_depth_th = self.cdt_client.compute(depth_msg, whole_mask_msg, n=n)
+    #         raw_flont_mask = extract_flont_mask_with_thresh(depth, opt_depth_th, n=n)
+    #         flont_indexes = extract_flont_instance_indexes(raw_flont_mask, masks, thresh)
+    #         flont_mask = merge_mask(np.array(masks)[flont_indexes])
+    #         gray_3c = convert_rgb_to_3dgray(img)
+    #         reversed_flont_mask = cv2.bitwise_not(flont_mask)
+    #         base_img = cv2.bitwise_and(img, img, mask=flont_mask) + \
+    #             cv2.bitwise_and(gray_3c, gray_3c, mask=reversed_flont_mask)
+    #         vis_base_img_msg = self.bridge.cv2_to_imgmsg(base_img)
+    #         rospy.loginfo(opt_depth_th)
 
-        return vis_base_img_msg, flont_indexes
+    #     return vis_base_img_msg, flont_indexes
 
     # def compute_object_center_point_stampd(self, c_3d_c_on_surface, header):
     #     c_3d_c = Point(c_3d_c_on_surface.x, c_3d_c_on_surface.y, c_3d_c_on_surface.z)
@@ -168,13 +157,13 @@ class GraspDetectionServer:
             )
         )
 
-    def compute_approach_distance(self, c_3d_c_on_surface, insertion_points_c):
-        # bottom_z = min([pt.z for pt in insertion_points_c])
-        bottom_z = max([pt.z for pt in insertion_points_c])
-        top_z = c_3d_c_on_surface.z
-        # length_to_center = bottom_z - top_z
-        length_to_center = (bottom_z - top_z) * self.approach_coef  # インスタンス頂点からのアプローチ距離
-        return length_to_center
+    # def compute_approach_distance(self, c_3d_c_on_surface, insertion_points_c):
+    #     # bottom_z = min([pt.z for pt in insertion_points_c])
+    #     bottom_z = max([pt.z for pt in insertion_points_c])
+    #     top_z = c_3d_c_on_surface.z
+    #     # length_to_center = bottom_z - top_z
+    #     length_to_center = (bottom_z - top_z) * self.approach_coef  # インスタンス頂点からのアプローチ距離
+    #     return length_to_center
 
     def compute_object_3d_radiuses(self, depth, bbox_handler):
         bbox_short_side_3d, bbox_long_side_3d = bbox_handler.get_sides_3d(self.projector, depth)
@@ -370,7 +359,6 @@ class GraspDetectionServer:
             )
 
             self.approach_center_pose_stamped_msg = center_pose_stamped_msg
-            # self.visualize_client.visualize_candidates(vis_base_img_msg, candidates_list, depth_msg)
 
             # if self.dbg_info_publisher:
             #     self.dbg_info_publisher.publish(GraspDetectionDebugInfo(header, candidates_list))
@@ -558,14 +546,7 @@ if __name__ == "__main__":
     hand_radius_mm = rospy.get_param("hand_radius_mm")
     finger_radius_mm = rospy.get_param("finger_radius_mm")
     hand_mount_rotation = rospy.get_param("hand_mount_rotation")
-    approach_coef = rospy.get_param("approach_coef")
-    elements_th = rospy.get_param("elements_th")
-    el_insertion_th = rospy.get_param("el_insertion_th")
-    el_contact_th = rospy.get_param("el_contact_th")
-    el_bw_depth_th = rospy.get_param("el_bw_depth_th")
     info_topic = rospy.get_param("image_info_topic")
-    enable_depth_filter = rospy.get_param("enable_depth_filter")
-    enable_candidate_filter = rospy.get_param("enable_candidate_filter")
     debug = rospy.get_param("debug")
 
     GraspDetectionServer(
@@ -575,14 +556,7 @@ if __name__ == "__main__":
         hand_radius_mm=hand_radius_mm,
         finger_radius_mm=finger_radius_mm,
         hand_mount_rotation=hand_mount_rotation,
-        approach_coef=approach_coef,
-        elements_th=elements_th,
-        el_insertion_th=el_insertion_th,
-        el_contact_th=el_contact_th,
-        el_bw_depth_th=el_bw_depth_th,
         info_topic=info_topic,
-        enable_depth_filter=enable_depth_filter,
-        enable_candidate_filter=enable_candidate_filter,
         debug=debug
     )
     rospy.spin()

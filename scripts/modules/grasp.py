@@ -14,15 +14,9 @@ import rospy
 class GraspDetector:
     # TODO: hand_radiusの追加
     def __init__(self, finger_num: int, hand_radius_mm: Mm, finger_radius_mm: Mm, unit_angle: int,
-                 frame_size: Tuple[int, int], fp: float,
-                 elements_th: float = 0., el_insertion_th: float = 0.5, 
-                 el_contact_th: float = 0.5, el_bw_depth_th: float = 0.):
+                 frame_size: Tuple[int, int], fp: float):
         self.finger_num = finger_num
         self.unit_angle = unit_angle  # 生成される把持候補の回転の刻み角
-        self.elements_th = elements_th
-        self.el_insertion_th = el_insertion_th
-        self.el_contact_th = el_contact_th
-        self.el_bw_depth_th = el_bw_depth_th
 
         # NOTE: mm, pxの変換は深度、解像度、受光素子のサイズに依存するのでdetect時に変換
         self.hand_radius_mm = hand_radius_mm
@@ -32,8 +26,6 @@ class GraspDetector:
         self.fp = fp
 
         self.base_angle = 360 // self.finger_num  # ハンドの指間の角度 (等間隔前提)
-        self.candidate_element_num = 360 // self.unit_angle
-        self.candidate_num = self.base_angle // self.unit_angle
 
         self.base_rmat = self._compute_rmat(self.base_angle)
         self.unit_rmat = self._compute_rmat(self.unit_angle)
@@ -233,8 +225,8 @@ class InsertionCalculator:
         center_d = depth[center[1], center[0]]
 
         # TMP 動作確認
-        if center_d == 0:
-            center_d = 600
+        # if center_d == 0:
+        #     center_d = 600
 
         hand_radius_px = self._convert_mm_to_px(self.hand_radius_mm, center_d)
         finger_radius_px = self._convert_mm_to_px(self.finger_radius_mm, center_d)

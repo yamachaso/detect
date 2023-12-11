@@ -5,8 +5,7 @@
 
     <arg name="fps" default="1" />
     <arg name="device" default="cuda:0" />
-    <arg name="enable_depth_filter" default="true" />
-    <arg name="enable_candidate_filter" default="false" />
+
     <!-- <arg name="finger_num" default="4" /> -->
     <arg name="finger_num" default="3" />
     <arg name="unit_angle" default="15" />
@@ -18,24 +17,19 @@
     <arg name="hand_mount_rotation" default="75" /> <!-- カメラの回転45° + 指の世界座標系y軸に対する角度30° -->
     <!-- <arg name="hand_mount_rotation" default="30" /> -->
     <!-- <arg name="hand_mount_rotation" default="0" /> -->
-    <arg name="approach_coef" default="1.0" />
-    <arg name="elements_th" default="0." />
-    <arg name="el_insertion_th" default="0.2" />
-    <arg name="el_contact_th" default="0.2" />
-    <arg name="el_bw_depth_th" default="0.2" />
 
     <arg name="robot_name" default="myrobot" />
     <arg name="debug" default="false" />
     <arg name="visualize_only_best_cnd" default="false" />
 
-    <arg name="used_camera" default="left_camera" />
+    <!-- <arg name="used_camera" default="left_camera" />
     <arg name="image_topic" default="/$(arg robot_name)/$(arg used_camera)/color/image_raw" />
-    <arg name="depth_topic" default="/$(arg robot_name)/$(arg used_camera)/aligned_depth_to_color/image_raw" />
-    <arg name="image_info_topic" default="/$(arg robot_name)/$(arg used_camera)/aligned_depth_to_color/camera_info" />
-    <arg name="depth_info_topic" default="/$(arg robot_name)/$(arg used_camera)/aligned_depth_to_color/camera_info" />
-    <arg name="points_topic" default="/$(arg robot_name)/$(arg used_camera)/depth/color/points" />
-    <arg name="seg_topic" default="/$(arg robot_name)/$(arg used_camera)/color/image_raw/segmented_img" />
-    <arg name="candidates_img_topic" default="/$(arg robot_name)/$(arg used_camera)/color/image_raw/candidates_img" />
+    <arg name="depth_topic" default="/$(arg robot_name)/$(arg used_camera)/aligned_depth_to_color/image_raw" /> -->
+    <arg name="image_info_topic" default="/$(arg robot_name)/left_camera/aligned_depth_to_color/camera_info" />
+    <!-- <arg name="depth_info_topic" default="/$(arg robot_name)/$(arg used_camera)/aligned_depth_to_color/camera_info" /> -->
+    <!-- <arg name="points_topic" default="/$(arg robot_name)/$(arg used_camera)/depth/color/points" /> -->
+    <arg name="seg_topic" default="/segmented_img" />
+    <!-- <arg name="candidates_img_topic" default="/$(arg robot_name)/$(arg used_camera)/color/image_raw/candidates_img" /> -->
 
 
     <!-- for realsense-viewer bags -->
@@ -52,30 +46,24 @@
 
     <param name="fps" value="$(arg fps)" />
     <param name="device" value="$(arg device)" />
-    <param name="enable_depth_filter" value="$(arg enable_depth_filter)" />
-    <param name="enable_candidate_filter" value="$(arg enable_candidate_filter)" />
+
     <param name="finger_num" value="$(arg finger_num)" />
     <param name="unit_angle" value="$(arg unit_angle)" />
     <param name="hand_radius_mm" value="$(arg hand_radius_mm)" />
     <param name="finger_radius_mm" value="$(arg finger_radius_mm)" />
     <param name="hand_mount_rotation" value="$(arg hand_mount_rotation)" />
-    <param name="approach_coef" value="$(arg approach_coef)" />
-    <param name="elements_th" value="$(arg elements_th)" />
-    <param name="el_insertion_th" value="$(arg el_insertion_th)" />
-    <param name="el_contact_th" value="$(arg el_contact_th)" />
-    <param name="el_bw_depth_th" value="$(arg el_bw_depth_th)" />
     
     <param name="robot_name" value="$(arg robot_name)" />
     <param name="debug" value="$(arg debug)" />
     <param name="visualize_only_best_cnd" value="$(arg visualize_only_best_cnd)" />
     
-    <param name="image_topic" value="$(arg image_topic)" />
-    <param name="depth_topic" value="$(arg depth_topic)" />
+    <!-- <param name="image_topic" value="$(arg image_topic)" />
+    <param name="depth_topic" value="$(arg depth_topic)" /> -->
     <param name="image_info_topic" value="$(arg image_info_topic)" />
-    <param name="depth_info_topic" value="$(arg depth_info_topic)" />
-    <param name="points_topic" value="$(arg points_topic)" />
+    <!-- <param name="depth_info_topic" value="$(arg depth_info_topic)" />
+    <param name="points_topic" value="$(arg points_topic)" /> -->
     <param name="seg_topic" value="$(arg seg_topic)" />
-    <param name="candidates_img_topic" value="$(arg candidates_img_topic)" />
+    <!-- <param name="candidates_img_topic" value="$(arg candidates_img_topic)" /> -->
 
     <!-- <node name="raw_view" pkg="rqt_image_view" type="rqt_image_view" args="/body_camera/color/image_raw" /> -->
     <group if="$(arg show_view)">
@@ -91,12 +79,8 @@
 
     <!-- action server -->
     <node name="tf_transform_server" pkg="detect" type="tf_transform_server.py" />
-    <node name="visualize_server" pkg="detect" type="visualize_server.py" />
     <node name="instance_segmentation_server" pkg="detect" type="instance_segmentation_server.py" />
     <node name="grasp_detection_server" pkg="detect" type="grasp_detection_server.py" output="screen" />
-    <group if="$(arg enable_depth_filter)">
-        <node name="compute_depth_threshold_server" pkg="detect" type="compute_depth_threshold_server.py" output="screen" />
-    </group>
     <node name="container_position_server" pkg="detect" type="container_position_server.py" />
     <node name="exclusion_list_server" pkg="detect" type="exclusion_list_server.py" />
 </launch>
