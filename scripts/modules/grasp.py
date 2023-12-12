@@ -3,13 +3,17 @@ from typing import List, Tuple
 import cv2
 import numpy as np
 
+from modules.ros.utils import PointProjector
 from modules.image import extract_depth_between_two_points
 from modules.type import Image, ImagePointUV, ImagePointUVD, Mm, Px
 from modules.colored_print import *
+from modules.ros.action_clients import TFClient
 
 from scipy import optimize
 
 import rospy
+from std_msgs.msg import Header
+from geometry_msgs.msg import Point, Pose, PoseStamped
 
 class GraspDetector:
     # TODO: hand_radiusの追加
@@ -29,6 +33,13 @@ class GraspDetector:
 
         self.base_rmat = self._compute_rmat(self.base_angle)
         self.unit_rmat = self._compute_rmat(self.unit_angle)
+
+
+        self.tf_clients = [
+            TFClient("left_camera_color_optical_frame"), 
+            TFClient("right_camera_color_optical_frame")
+        ]
+
 
     def _compute_rmat(self, angle):
         """
@@ -66,9 +77,9 @@ class GraspDetector:
         return np.abs(a * px + b * py + c) / np.sqrt(a * a + b * b)
 
 
-    def get_min_distance_with_wall(self, center, cor_coors):
+    def get_min_distance_with_wall(self, center, uvs):
         px, py = center
-        br_x, br_y, tr_x, tr_y, tl_x, tl_y, bl_x, bl_y = cor_coors
+        (br_x, br_y), (tr_x, tr_y), (tl_x, tl_y), (bl_x, bl_y) = uvs
         wall_distance = 100000000
         wall_distance = min(wall_distance, self.distance_point_between_line(px, py, br_x, br_y, tr_x, tr_y))
         wall_distance = min(wall_distance, self.distance_point_between_line(px, py, tr_x, tr_y, tl_x, tl_y))
@@ -78,7 +89,21 @@ class GraspDetector:
         return wall_distance
 
 
-    def detect(self, img: Image, depth: Image, centers, contours, masks, cor_coos, exclusion_list):
+    def get_corner_coordinate(self, arm_index):
+        header = Header()
+        header.frame_id = "container_br"
+        br_point = self.tf_clients[arm_index].transform_point(header, Point()).point      
+        header.frame_id = "container_tr"
+        tr_point = self.tf_clients[arm_index].transform_point(header, Point()).point
+        header.frame_id = "container_tl"
+        tl_point = self.tf_clients[arm_index].transform_point(header, Point()).point
+        header.frame_id = "container_bl"
+        bl_point = self.tf_clients[arm_index].transform_point(header, Point()).point
+        
+        return (br_point.x, br_point.y), (tr_point.x, tr_point.y), (tl_point.x, tl_point.y), (bl_point.x, bl_point.y)
+
+
+    def detect(self, arm_index, img: Image, depth: Image, projector: PointProjector, centers, contours, masks, exclusion_list):
         # 単位変換
         depth_list = [depth[center[1]][center[0]] for center in centers]
         max_depth = max(depth_list)
@@ -95,7 +120,26 @@ class GraspDetector:
         min_iou = min(ellipse_iou)
         ellipse_score = (ellipse_iou - min_iou) / (max_iou - min_iou + 0.0001)
 
-        wall_list = [self.get_min_distance_with_wall(center, cor_coos) for center in centers]
+
+        cor_coos = self.get_corner_coordinate(arm_index)
+
+        printg("cor_coos : {}".format(cor_coos))
+
+        uvs_list = []
+        for distance in depth_list:
+            z = distance / 1000 # mm -> m
+            uvs = [projector.camera_to_screen(x, y, z) for x, y in cor_coos]
+            uvs_list.append(uvs)
+        
+        printy("center : {}, uvs : {}".format(centers[0], uvs_list[0]))
+
+        (u1, v1), (u2, v2), (u3, v3), (u4, v4) = uvs_list[0]
+        cv2.line(img, (int(u1), int(v1)), (int(u2), int(v2)), 255, 2, lineType=cv2.LINE_AA)
+        cv2.line(img, (int(u2), int(v2)), (int(u3), int(v3)), 255, 2, lineType=cv2.LINE_AA)
+        cv2.line(img, (int(u3), int(v3)), (int(u4), int(v4)), 255, 2, lineType=cv2.LINE_AA)
+        cv2.line(img, (int(u4), int(v4)), (int(u1), int(v1)), 255, 2, lineType=cv2.LINE_AA)
+
+        wall_list = [self.get_min_distance_with_wall(center, uvs) for (center, uvs) in zip(centers, uvs_list)]
         max_wall = max(wall_list)
         min_wall = min(wall_list)
         wall_score = (wall_list - min_wall) / (max_wall - min_wall + 0.0001)
@@ -104,6 +148,12 @@ class GraspDetector:
         final_score = depth_score * 0.6 + ellipse_score * 0.1 + wall_score * 0.3
 
         printg(wall_score)
+
+        for i in range(len(final_score)):
+           cv2.putText(img, f"{wall_score[i]:.2f}", 
+                       (centers[i][0] + 5, centers[i][1] + 5), 
+                       cv2.FONT_HERSHEY_DUPLEX, 0.5, (255, 0, 255), 1)
+
 
         while final_score.size > 0:
             target_index = np.argmax(final_score)

@@ -67,6 +67,10 @@ class PointProjector:
         object_point = Point(x, y, z)
         return object_point
     
+    def camera_to_screen(self, x, y, z):
+        uv = self.cam_model.project3dToPixel((x, y, z))
+        return uv
+    
     def _get_angle_between_vectors(self, u: np.ndarray, v: np.ndarray):
         """ベクトル間の角度を求める"""
         i = np.inner(u, v) # 内積
