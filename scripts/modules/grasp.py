@@ -2,12 +2,14 @@ from typing import List, Tuple
 
 import cv2
 import numpy as np
+import torch
 
 from modules.ros.utils import PointProjector
 from modules.image import extract_depth_between_two_points
 from modules.type import Image, ImagePointUV, ImagePointUVD, Mm, Px
 from modules.colored_print import *
 from modules.ros.action_clients import TFClient
+from modules.ros.publishers import ImageMatPublisher2
 
 from scipy import optimize
 
@@ -39,6 +41,12 @@ class GraspDetector:
             TFClient("left_camera_color_optical_frame"), 
             TFClient("right_camera_color_optical_frame")
         ]
+
+
+        self.result_publisher = ImageMatPublisher2("/grasp_detection_server_result", queue_size=10)
+        self.w1 = torch.tensor(1.0 / 3, requires_grad=True)
+        self.w2 = torch.tensor(1.0 / 3, requires_grad=True)
+        self.lr = 1.0e-2
 
 
     def _compute_rmat(self, angle):
@@ -104,12 +112,14 @@ class GraspDetector:
 
 
     def detect(self, arm_index, img: Image, depth: Image, projector: PointProjector, centers, contours, masks, exclusion_list):
-        # 単位変換
-        depth_list = [depth[center[1]][center[0]] for center in centers]
-        max_depth = max(depth_list)
-        min_depth = min(depth_list)
+        # depth score
+        depth_list = np.array([depth[center[1]][center[0]] for center in centers])
+        depth_list[depth_list > 1800] = max(depth_list[depth_list < 1800]) # 1.8m以上は明らかにおかしい
+        max_depth = depth_list.max()
+        min_depth = depth_list.min()
         depth_score = 1 - (depth_list - min_depth) / (max_depth - min_depth + 0.0001)
 
+        # ellipse score
         ellipse_list = [cv2.fitEllipse(contour) for contour in contours]
         ellipse_masks = [cv2.ellipse(np.zeros_like(depth),ellipse, 1, -1).astype(np.bool) for ellipse in ellipse_list]
         original_masks = [mask.astype(np.bool) for mask in masks]
@@ -120,40 +130,74 @@ class GraspDetector:
         min_iou = min(ellipse_iou)
         ellipse_score = (ellipse_iou - min_iou) / (max_iou - min_iou + 0.0001)
 
-
+        # wall score
         cor_coos = self.get_corner_coordinate(arm_index)
 
-        printg("cor_coos : {}".format(cor_coos))
+        printg("depth_list : {}".format(depth_list))
 
         uvs_list = []
         for distance in depth_list:
             z = distance / 1000 # mm -> m
             uvs = [projector.camera_to_screen(x, y, z) for x, y in cor_coos]
             uvs_list.append(uvs)
+
+        wall_list = np.array([self.get_min_distance_with_wall(center, uvs) for (center, uvs) in zip(centers, uvs_list)])
+
+        def sigmoid(x):
+            a = 100 # キャベツの直径(px単位)
+            return 1-1.0 / (1.0 + np.exp((x  - a) / a * 5 ))
+        wall_score = sigmoid(wall_list)
+
+        # # 単位変換
+        # depth_list = [depth[center[1]][center[0]] for center in centers]
+        # max_depth = max(depth_list)
+        # min_depth = min(depth_list)
+        # depth_score = 1 - (depth_list - min_depth) / (max_depth - min_depth + 0.0001)
+
+        # ellipse_list = [cv2.fitEllipse(contour) for contour in contours]
+        # ellipse_masks = [cv2.ellipse(np.zeros_like(depth),ellipse, 1, -1).astype(np.bool) for ellipse in ellipse_list]
+        # original_masks = [mask.astype(np.bool) for mask in masks]
+        # ellipse_iou = []
+        # for mask, emask in zip(original_masks, ellipse_masks):
+        #     ellipse_iou.append(np.sum(mask * emask) / np.sum(mask | emask)) # IoU
+        # max_iou = max(ellipse_iou)
+        # min_iou = min(ellipse_iou)
+        # ellipse_score = (ellipse_iou - min_iou) / (max_iou - min_iou + 0.0001)
+
+
+        # cor_coos = self.get_corner_coordinate(arm_index)
+
+        # printg("cor_coos : {}".format(cor_coos))
+
+        # uvs_list = []
+        # for distance in depth_list:
+        #     z = distance / 1000 # mm -> m
+        #     uvs = [projector.camera_to_screen(x, y, z) for x, y in cor_coos]
+        #     uvs_list.append(uvs)
         
-        printy("center : {}, uvs : {}".format(centers[0], uvs_list[0]))
+        # printy("center : {}, uvs : {}".format(centers[0], uvs_list[0]))
 
-        (u1, v1), (u2, v2), (u3, v3), (u4, v4) = uvs_list[0]
-        cv2.line(img, (int(u1), int(v1)), (int(u2), int(v2)), 255, 2, lineType=cv2.LINE_AA)
-        cv2.line(img, (int(u2), int(v2)), (int(u3), int(v3)), 255, 2, lineType=cv2.LINE_AA)
-        cv2.line(img, (int(u3), int(v3)), (int(u4), int(v4)), 255, 2, lineType=cv2.LINE_AA)
-        cv2.line(img, (int(u4), int(v4)), (int(u1), int(v1)), 255, 2, lineType=cv2.LINE_AA)
+        # (u1, v1), (u2, v2), (u3, v3), (u4, v4) = uvs_list[0]
+        # cv2.line(img, (int(u1), int(v1)), (int(u2), int(v2)), 255, 2, lineType=cv2.LINE_AA)
+        # cv2.line(img, (int(u2), int(v2)), (int(u3), int(v3)), 255, 2, lineType=cv2.LINE_AA)
+        # cv2.line(img, (int(u3), int(v3)), (int(u4), int(v4)), 255, 2, lineType=cv2.LINE_AA)
+        # cv2.line(img, (int(u4), int(v4)), (int(u1), int(v1)), 255, 2, lineType=cv2.LINE_AA)
 
-        wall_list = [self.get_min_distance_with_wall(center, uvs) for (center, uvs) in zip(centers, uvs_list)]
-        max_wall = max(wall_list)
-        min_wall = min(wall_list)
-        wall_score = (wall_list - min_wall) / (max_wall - min_wall + 0.0001)
+        # wall_list = [self.get_min_distance_with_wall(center, uvs) for (center, uvs) in zip(centers, uvs_list)]
+        # max_wall = max(wall_list)
+        # min_wall = min(wall_list)
+        # wall_score = (wall_list - min_wall) / (max_wall - min_wall + 0.0001)
 
         # TMP!!!!!
-        final_score = depth_score * 0.6 + ellipse_score * 0.1 + wall_score * 0.3
+        final_score = depth_score * 0.6 + ellipse_score * 0.2 + wall_score * 0.3
 
         printg(wall_score)
 
         for i in range(len(final_score)):
-           cv2.putText(img, f"{wall_score[i]:.2f}", 
+           cv2.putText(img, f"{final_score[i]:.2f}", 
                        (centers[i][0] + 5, centers[i][1] + 5), 
                        cv2.FONT_HERSHEY_DUPLEX, 0.5, (255, 0, 255), 1)
-
+        
 
         while final_score.size > 0:
             target_index = np.argmax(final_score)
@@ -170,6 +214,91 @@ class GraspDetector:
         cv2.ellipse(img, ellipse_list[target_index], (0, 255, 255), 3)
         return target_index, img, max(final_score), centers, contours
 
+
+    def detect_training(self, arm_index, img: Image, depth: Image, projector: PointProjector, centers, contours, masks, exclusion_list):
+        # depth score
+        depth_list = np.array([depth[center[1]][center[0]] for center in centers])
+        depth_list[depth_list > 1800] = max(depth_list[depth_list < 1800]) # 1.8m以上は明らかにおかしい
+        max_depth = depth_list.max()
+        min_depth = depth_list.min()
+        depth_score = 1 - (depth_list - min_depth) / (max_depth - min_depth + 0.0001)
+
+        # ellipse score
+        ellipse_list = [cv2.fitEllipse(contour) for contour in contours]
+        ellipse_masks = [cv2.ellipse(np.zeros_like(depth),ellipse, 1, -1).astype(np.bool) for ellipse in ellipse_list]
+        original_masks = [mask.astype(np.bool) for mask in masks]
+        ellipse_iou = []
+        for mask, emask in zip(original_masks, ellipse_masks):
+            ellipse_iou.append(np.sum(mask * emask) / np.sum(mask | emask)) # IoU
+        max_iou = max(ellipse_iou)
+        min_iou = min(ellipse_iou)
+        ellipse_score = (ellipse_iou - min_iou) / (max_iou - min_iou + 0.0001)
+
+        # wall score
+        cor_coos = self.get_corner_coordinate(arm_index)
+
+        printg("depth_list : {}".format(depth_list))
+
+        uvs_list = []
+        for distance in depth_list:
+            z = distance / 1000 # mm -> m
+            uvs = [projector.camera_to_screen(x, y, z) for x, y in cor_coos]
+            uvs_list.append(uvs)
+
+        wall_list = np.array([self.get_min_distance_with_wall(center, uvs) for (center, uvs) in zip(centers, uvs_list)])
+
+        def sigmoid(x):
+            a = 100 # キャベツの直径(px単位)
+            return 1-1.0 / (1.0 + np.exp((x  - a) / a * 5 ))
+        wall_score = sigmoid(wall_list)
+
+        # max_wall = max(wall_list)
+        # min_wall = min(wall_list)
+        # wall_score = (wall_list - min_wall) / (max_wall - min_wall + 0.0001)
+
+        for i in range(len(centers)):
+           cv2.putText(img, f"{wall_score[i]:.2f}, {i}", 
+                       (centers[i][0] + 5, centers[i][1] + 5), 
+                       cv2.FONT_HERSHEY_DUPLEX, 0.5, (255, 0, 255), 1)
+           
+           
+        self.result_publisher.publish(img)
+
+        index = int(input("Enter the best cabbage index you think : "))
+
+        # ref: https://rightcode.co.jp/blog/information-technology/pytorch-automatic-differential-linear-regression
+
+        depth_score = torch.from_numpy(depth_score)
+        ellipse_score = torch.from_numpy(ellipse_score)
+        wall_score = torch.from_numpy(wall_score)
+        final_score = depth_score * self.w1 + ellipse_score * self.w2 + wall_score * (1 - self.w1 - self.w2)
+
+        printb("dep: {}, ell: {}, wal: {}".format(depth_score[index],
+                                                  ellipse_score[index],
+                                                  wall_score[index]))
+        
+        print(torch.mean(torch.cat([depth_score[0:index], depth_score[index:]])))
+        print(torch.mean(torch.cat([ellipse_score[0:index], ellipse_score[index:]])))
+        print(torch.mean(torch.cat([wall_score[0:index], wall_score[index:]])))
+
+
+        print("final score : ", final_score[index])
+        print("depth score : ", depth_score[index])
+        print("ellipse score : ", ellipse_score[index])
+        print("wall score: ", wall_score[index])
+        y = final_score[index] - torch.mean(torch.cat([final_score[0:index], final_score[index:]]))
+
+        y.backward()
+        print("y : ", y)
+        print("grad : ", self.w1.grad, self.w2.grad)
+
+        with torch.no_grad():
+            self.w1 += self.w1.grad * self.lr
+            self.w2 += self.w2.grad * self.lr
+            self.w1.grad.zero_()
+            self.w2.grad.zero_()
+
+        print("重み: ", self.w1, self.w2)
 
 
 class InsertionCalculator:

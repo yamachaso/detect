@@ -102,6 +102,7 @@ class GraspDetectionServer:
         self.pool = Pool(100)
 
         self.server = SimpleActionServer(name, GraspDetectionAction, self.callback, False)
+        # self.server = SimpleActionServer(name, GraspDetectionAction, self.callback_training, False)
         self.server2 = SimpleActionServer('calcurate_insertion_server', CalcurateInsertionAction, self.callback2, False)
         self.server.start()
         self.server2.start()
@@ -370,6 +371,42 @@ class GraspDetectionServer:
             rospy.logerr(err)
 
 
+    def callback_training(self, goal: GraspDetectionGoal):
+        printb("grasp detect callback called")
+        # 0: left, 1: right
+        arm_index = goal.arm_index
+        img_msg = goal.image
+        depth_msg = goal.depth
+        points_msg = goal.points
+        frame_id = img_msg.header.frame_id
+        stamp = img_msg.header.stamp
+        header = Header(frame_id=frame_id, stamp=stamp)
+        try:
+            start_time = time()
+            img = self.bridge.imgmsg_to_cv2(img_msg)
+            depth = self.bridge.imgmsg_to_cv2(depth_msg)
+            instances = self.is_client.predict(img_msg) # List[Instance]
+
+            vis_base_img_msg = img_msg
+
+            (centers, contours, masks) = self.instances2centers_contours_masks(depth, instances)
+
+            printr("center length : {}".format(len(centers)))
+
+            # cor_coos = self.get_corner_coordinate()
+            exclusion_list = self.el_client.ref(arm_index)
+            printc("exclusion_list : {}".format(exclusion_list))
+            self.grasp_detector.detect_training(arm_index, img, depth, self.projector, centers, contours, masks, exclusion_list) # 一番スコアの良いキャベツのインデックス
+
+            object = DetectedObject()
+
+            self.server.set_succeeded(GraspDetectionResult(header, object))
+
+        except Exception as err:
+            rospy.logerr(err)
+
+
+
     def convert_mm_to_angle(self, r_target):
         # 引数 r が 60 ~ 100の間でないと精度が低い
         r0 = 95 # 付け根部分の関係
@@ -399,11 +436,11 @@ class GraspDetectionServer:
 
     def convert_angle_to_pressure(self, angle):
         # degree
-        a = 53.77
-        b = 21.79
+        a = 55.93
+        b = 6.71
         # c = 10.84
-        # c = 30
-        c = 40
+        c = 30
+        # c = 13.63
         print(angle)
         if b * b - 4 * a  *(c - angle) < 0:
             return 0

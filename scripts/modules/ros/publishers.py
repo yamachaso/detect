@@ -44,6 +44,21 @@ class ImageMatPublisher(Publisher):
         super().publish(msg)
 
 
+
+class ImageMatPublisher2(Publisher):
+    """
+    backlink:instance_segmentation_server.py, visualize_server.py
+    """
+    global bridge
+
+    def __init__(self, name, subscriber_listener=None, tcp_nodelay=False, latch=False, headers=None, queue_size=None):
+        super().__init__(name, Image, subscriber_listener,
+                         tcp_nodelay, latch, headers, queue_size)
+
+    def publish(self, img_mat):
+        msg = bridge.cv2_to_imgmsg(img_mat, "rgb8")
+        super().publish(msg)
+
 class DetectedObjectsPublisher(Publisher):
     """
     not in use now
