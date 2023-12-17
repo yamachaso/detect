@@ -257,9 +257,9 @@ class GraspDetector:
         # wall_score = (wall_list - min_wall) / (max_wall - min_wall + 0.0001)
 
         for i in range(len(centers)):
-           cv2.putText(img, f"{wall_score[i]:.2f}, {i}", 
-                       (centers[i][0] + 5, centers[i][1] + 5), 
-                       cv2.FONT_HERSHEY_DUPLEX, 0.5, (255, 0, 255), 1)
+           cv2.putText(img, f"{i}", 
+                       (centers[i][0] - 5, centers[i][1] + 5), 
+                       cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 0), 2, cv2.LINE_AA)
            
            
         self.result_publisher.publish(img)
@@ -396,12 +396,21 @@ class InsertionCalculator:
         if i < 0 or i >= h or j < 0 or j >= w:
             return False
         return True
+    
+    def is_depth_valid(self, d):
+        if d < 50 or d > 1800: # 50mm以下または1800mm以上はおかしい
+            return False
+        else:
+            return True
 
     def get_xytr_list(self, depth: Image, contour: np.ndarray, center):
         # center_dが欠損すると0 divisionになるので注意
         # self.index = self.get_target_index(contours)
         # center = centers[self.index]
         center_d = depth[center[1], center[0]]
+        if not self.is_depth_valid(center_d):
+            center_d = self.point_average_depth(center[1], center[0], depth, 5)
+
 
         # TMP 動作確認
         # if center_d == 0:
@@ -430,6 +439,8 @@ class InsertionCalculator:
         mask = np.zeros_like(depth)
         cv2.circle(mask, (wi, hi), int(finger_radius_px), 1, thickness=-1)
         mask = mask.astype(np.bool)
+        mask[depth < 50] = False
+        mask[depth > 1800] = False
 
         return depth[mask].mean()
     

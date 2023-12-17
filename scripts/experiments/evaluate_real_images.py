@@ -113,7 +113,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 from detectron2.config import get_cfg
 # from entities.predictor import Predictor
-from modules.const import CONFIGS_PATH, OUTPUTS_PATH, SAMPLES_PATH
+from modules.const import CONFIGS_PATH, OUTPUTS_PATH, SAMPLES_PATH, DATASETS_PATH
 from modules.grasp import GraspDetector
 from modules.image import (compute_optimal_depth_thresh,
                            extract_flont_instance_indexes,
@@ -123,7 +123,8 @@ from modules.visualize import convert_rgb_to_3dgray, get_color_by_score
 from utils import RealsenseBagHandler, imshow
 
 config_path = f"{CONFIGS_PATH}/config.yaml"
-weight_path = f"{OUTPUTS_PATH}/mask_rcnn/model_final.pth"
+# weight_path = f"{OUTPUTS_PATH}/mask_rcnn/model_final.pth"
+weight_path = f"{OUTPUTS_PATH}/2023_12_15_06_01/model_final.pth"
 device = "cuda:0"
 
 print(config_path)
@@ -141,6 +142,9 @@ handler = RealsenseBagHandler(path, 640, 480, 30)
 
 img, depth = handler.get_images()
 print(img.dtype, depth.dtype)
+
+img = cv2.imread(f"{DATASETS_PATH}/train/images/IMG_3563.jpg")
+
 fig, axes = plt.subplots(1, 2)
 axes[0].imshow(img)
 axes[1].imshow(depth, cmap="binary")

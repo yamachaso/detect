@@ -22,7 +22,7 @@ print(MetadataCatalog.get("cabbage_train"))
 print("##############")
 print(MetadataCatalog.get("cabbage_val"))
 print("##############")
-print(1 / 0)
+# print(1 / 0)
 
 cfg = get_cfg()
 cfg.merge_from_file(f"{CONFIGS_PATH}/config.yaml")

@@ -247,7 +247,7 @@ class GraspDetectionServer:
     # def check_wall_contact(self, pose_stamped_msg):
     def check_wall_contact(self, contours_3d_list):
        
-        contact_dis = 0.05 # 15cm以内だったらコンテナと接触している
+        contact_dis = 0.09 # 15cm以内だったらコンテナと接触している
         r, t, l, b = 1, 2, 4, 8
         res = 0
 
@@ -389,6 +389,9 @@ class GraspDetectionServer:
 
             vis_base_img_msg = img_msg
 
+            scores = [instance_msg.score for instance_msg in instances]
+            printy("SCORES: {}".format(scores))
+
             (centers, contours, masks) = self.instances2centers_contours_masks(depth, instances)
 
             printr("center length : {}".format(len(centers)))
@@ -434,12 +437,16 @@ class GraspDetectionServer:
         result = optimize.minimize(lambda x: np.sum(np.array(func(x, r_target))**2), initial_guess, constraints=cons, method="SLSQP")
         return result.x[0]
 
-    def convert_angle_to_pressure(self, angle):
+    def convert_angle_to_pressure(self, angle, arm_index):
         # degree
         a = 55.93
         b = 6.71
-        # c = 10.84
-        c = 30
+        if arm_index == 0:
+            # c = 10.84
+            c = 30
+        else:
+            c = 35
+             
         # c = 13.63
         print(angle)
         if b * b - 4 * a  *(c - angle) < 0:
@@ -447,9 +454,9 @@ class GraspDetectionServer:
         else:
             return (- b + np.sqrt(b * b - 4 * a  *(c - angle)) ) / (2 * a)
 
-    def convert_mm_to_pascal(self, r):
+    def convert_mm_to_pascal(self, r, arm_index):
         angle = np.rad2deg(self.convert_mm_to_angle(r))
-        pressure = self.convert_angle_to_pressure(angle)
+        pressure = self.convert_angle_to_pressure(angle, arm_index)
 
         # print("\033[92m{}\033[0m".format("radius"))
         # print("\033[92m{}\033[0m".format(r))
@@ -465,10 +472,12 @@ class GraspDetectionServer:
         z = a_msg.pose.position.z - b_msg.pose.position.z
 
         return np.sqrt(x**2 + y**2 + z**2)
+        # return np.sqrt(x**2 + y**2)
 
 
     def callback2(self, goal: CalcurateInsertionGoal):
         printb("calculate insertion callback called")
+        arm_index = goal.arm_index
         img_msg = goal.image
         depth_msg = goal.depth
         points_msg = goal.points
@@ -488,17 +497,37 @@ class GraspDetectionServer:
             contours = np.array([multiarray2numpy(int, np.int32, instance_msg.contour) for instance_msg in instances])
             centers = np.array([np.array(instance_msg.center) for instance_msg in instances])
 
-            centers_3d_list = [self.compute_object_center_pose_stampd(
+            # centers_3d_list = [self.compute_object_center_pose_stampd(
+            #     self.projector.screen_to_camera_2(points_msg, centers_i), header
+            # ) for centers_i in centers]
+
+            centers_3d_list = []
+            for center_i in centers:
+                depth_i = depth[center_i[1]][center_i[0]]
+                if not self.insertion_calculator.is_depth_valid(depth_i):
+                    depth_i = self.insertion_calculator.point_average_depth(
+                        center_i[1], center_i[0], depth, 5
+                    )
+                centers_3d_list.append(
+                    self.compute_object_center_pose_stampd(
+                        self.projector.screen_to_camera(center_i, depth_i), header
+                    )
+                )
+
+
+            centers_3d_list_old = [self.compute_object_center_pose_stampd(
                 self.projector.screen_to_camera_2(points_msg, centers_i), header
             ) for centers_i in centers]
 
             distance_list = [self.distance_btw_pose_stamped(self.approach_center_pose_stamped_msg, centers_3d_list_i) for centers_3d_list_i in centers_3d_list]
+            distance_list_old = [self.distance_btw_pose_stamped(self.approach_center_pose_stamped_msg, centers_3d_list_i) for centers_3d_list_i in centers_3d_list_old]
 
             target_index = np.argmin(distance_list)
             success = True
 
             printc("distance! : {} m".format(distance_list[target_index]))
-            if distance_list[target_index] > 0.1: # 10cm以上異なったらそれは別のキャベツなのでNG
+            printc("distance_old! : {} m".format(distance_list_old[target_index]))
+            if distance_list[target_index] > 0.15: # 10cm以上異なったらそれは別のキャベツなのでNG
                 success = False
 
             contour = contours[target_index]
@@ -507,6 +536,7 @@ class GraspDetectionServer:
             ic_result = self.insertion_calculator.calculate(depth, contour, center)
 
             x, y, t, r, d = ic_result # r はmm単位
+            r += 5
 
             # 把持のとき、ハンドとキャベツをどのくらい離すか？
             access_distance = self.insertion_calculator.get_access_distance(contour)
@@ -540,8 +570,19 @@ class GraspDetectionServer:
                 # cv2.imwrite(f'{OUTPUT_DIR}/color/{self.count}.jpg', img_result)
                 # cv2.imwrite(f'{OUTPUT_DIR}/depth/{self.count}.jpg', img_result2)
                 # self.count += 1
-    
-                c_3d_c_on_surface = self.projector.screen_to_camera_2(points_msg, (x, y))
+
+
+                c_3d_c_on_surface_old = self.projector.screen_to_camera_2(points_msg, (x, y))
+
+                depth_i = depth[y][x]
+                if not self.insertion_calculator.is_depth_valid(depth_i):
+                    depth_i = self.insertion_calculator.point_average_depth(
+                        center_i[1], center_i[0], depth, 5
+                    )
+
+                c_3d_c_on_surface = self.projector.screen_to_camera((x, y), depth_i)
+
+
 
 
 
@@ -559,7 +600,7 @@ class GraspDetectionServer:
                 # 絶対値が最も小さい角度
                 nearest_angle = self.augment_angles(angle)[0]
 
-                pressure = self.convert_mm_to_pascal(r)
+                pressure = self.convert_mm_to_pascal(r, arm_index)
 
                 spent = time() - start_time
                 # print(f"stamp: {stamp.to_time()}, spent: {spent:.3f}, objects: {len(objects)} ({len(instances)})")

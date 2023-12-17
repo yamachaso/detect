@@ -65,7 +65,7 @@ class PredictResult:
 
         # スコア95%以上のみOK
         for i in range(mask_array.shape[0]):
-            if self.scores[i] < 0.95:
+            if self.scores[i] < 0.5:
                 outlier_indexes.append(i)
         
         valid_indexes = [i for i in range(
