@@ -29,7 +29,7 @@
  -->
 
 
-	<node name="container_tf_adjuster" pkg="detect" type="container_tf_adjuster.py" />
+	<node name="container_tf_adjuster" pkg="detect" type="container_tf_adjuster.py" output="screen" />
 
   <node pkg="tf" type="static_transform_publisher" name="container_br" args="0 -0.59 0.12 0 0 0 /container_origin /container_br 30"/>
   <node pkg="tf" type="static_transform_publisher" name="container_tr" args="1 -0.59 0.12 0 0 0 /container_origin /container_tr 30"/>

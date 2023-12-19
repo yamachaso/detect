@@ -88,13 +88,22 @@ class GraspDetector:
     def get_min_distance_with_wall(self, center, uvs):
         px, py = center
         (br_x, br_y), (tr_x, tr_y), (tl_x, tl_y), (bl_x, bl_y) = uvs
-        wall_distance = 100000000
-        wall_distance = min(wall_distance, self.distance_point_between_line(px, py, br_x, br_y, tr_x, tr_y))
-        wall_distance = min(wall_distance, self.distance_point_between_line(px, py, tr_x, tr_y, tl_x, tl_y))
-        wall_distance = min(wall_distance, self.distance_point_between_line(px, py, tl_x, tl_y, bl_x, bl_y))
-        wall_distance = min(wall_distance, self.distance_point_between_line(px, py, bl_x, bl_y, br_x, br_y))
+        # wall_distance = 100000000
+        # wall_distance = min(wall_distance, self.distance_point_between_line(px, py, br_x, br_y, tr_x, tr_y))
+        # wall_distance = min(wall_distance, self.distance_point_between_line(px, py, tr_x, tr_y, tl_x, tl_y))
+        # wall_distance = min(wall_distance, self.distance_point_between_line(px, py, tl_x, tl_y, bl_x, bl_y))
+        # wall_distance = min(wall_distance, self.distance_point_between_line(px, py, bl_x, bl_y, br_x, br_y))
+        wall_distance = np.array([
+            self.distance_point_between_line(px, py, br_x, br_y, tr_x, tr_y),
+            self.distance_point_between_line(px, py, tr_x, tr_y, tl_x, tl_y),
+            self.distance_point_between_line(px, py, tl_x, tl_y, bl_x, bl_y),
+            self.distance_point_between_line(px, py, bl_x, bl_y, br_x, br_y)
+        ])
+        wall_distance.sort()
 
-        return wall_distance
+        # if wall_distance[1]
+
+        return wall_distance[0]
 
 
     def get_corner_coordinate(self, arm_index):
@@ -130,6 +139,18 @@ class GraspDetector:
         min_iou = min(ellipse_iou)
         ellipse_score = (ellipse_iou - min_iou) / (max_iou - min_iou + 0.0001)
 
+        # angle score
+        ratio_list = np.array([min(el[1][0], el[1][1]) / max(el[1][0], el[1][1]) for el in ellipse_list])
+        max_ratio = max(ratio_list)
+        min_raito = min(ratio_list)
+        angle_score = (ratio_list - min_raito) / (max_ratio - min_raito + 0.0001)
+
+        # area score
+        area_list = np.array([cv2.contourArea(contour) for contour in contours])
+        max_area = max(area_list)
+        min_area = min(area_list)
+        area_score = (area_list - min_area) / (max_area - min_area + 0.0001)
+
         # wall score
         cor_coos = self.get_corner_coordinate(arm_index)
 
@@ -147,6 +168,31 @@ class GraspDetector:
             a = 100 # キャベツの直径(px単位)
             return 1-1.0 / (1.0 + np.exp((x  - a) / a * 5 ))
         wall_score = sigmoid(wall_list)
+
+
+
+        dc_pub = ImageMatPublisher2("/depth_score", queue_size=10)
+        fc_pub = ImageMatPublisher2("/friction_score", queue_size=10)
+        ac_pub = ImageMatPublisher2("/angle_score", queue_size=10)
+        wc_pub = ImageMatPublisher2("/wall_score", queue_size=10)
+        arc_pub = ImageMatPublisher2("/area_score", queue_size=10)
+
+        dc_img, fc_img, ac_img, wc_img, arc_img =  img.copy(), img.copy(), img.copy(), img.copy(), img.copy()
+        for i in range(len(depth_score)):
+           cv2.putText(dc_img, f"{depth_score[i]:.2f}", (centers[i][0] - 10, centers[i][1] + 10), cv2.FONT_HERSHEY_DUPLEX, 1, (0, 0, 0), 1)
+           cv2.putText(fc_img, f"{ellipse_score[i]:.2f}", (centers[i][0] - 10, centers[i][1] + 10), cv2.FONT_HERSHEY_DUPLEX, 1, (0, 0, 0), 1)
+           cv2.putText(ac_img, f"{angle_score[i]:.2f}", (centers[i][0] - 10, centers[i][1] + 10), cv2.FONT_HERSHEY_DUPLEX, 1, (0, 0, 0), 1)
+           cv2.putText(wc_img, f"{wall_score[i]:.2f}", (centers[i][0] - 10, centers[i][1] + 10), cv2.FONT_HERSHEY_DUPLEX, 1, (0, 0, 0), 1)
+           cv2.putText(arc_img, f"{area_score[i]:.2f}", (centers[i][0] - 10, centers[i][1] + 10), cv2.FONT_HERSHEY_DUPLEX, 1, (0, 0, 0), 1)
+        #    cv2.putText(tc_img, f"{final_score[i]:.2f}", (centers[i][0] - 10, centers[i][1] + 10), cv2.FONT_HERSHEY_DUPLEX, 1, (0, 0, 0), 1)
+
+        dc_pub.publish(dc_img)
+        fc_pub.publish(fc_img)
+        ac_pub.publish(ac_img)
+        wc_pub.publish(wc_img)
+        arc_pub.publish(arc_img)
+        # tc_pub.publish(tc_img)
+
 
         # # 単位変換
         # depth_list = [depth[center[1]][center[0]] for center in centers]
@@ -177,11 +223,11 @@ class GraspDetector:
         
         # printy("center : {}, uvs : {}".format(centers[0], uvs_list[0]))
 
-        # (u1, v1), (u2, v2), (u3, v3), (u4, v4) = uvs_list[0]
-        # cv2.line(img, (int(u1), int(v1)), (int(u2), int(v2)), 255, 2, lineType=cv2.LINE_AA)
-        # cv2.line(img, (int(u2), int(v2)), (int(u3), int(v3)), 255, 2, lineType=cv2.LINE_AA)
-        # cv2.line(img, (int(u3), int(v3)), (int(u4), int(v4)), 255, 2, lineType=cv2.LINE_AA)
-        # cv2.line(img, (int(u4), int(v4)), (int(u1), int(v1)), 255, 2, lineType=cv2.LINE_AA)
+        (u1, v1), (u2, v2), (u3, v3), (u4, v4) = uvs_list[0]
+        cv2.line(img, (int(u1), int(v1)), (int(u2), int(v2)), 255, 2, lineType=cv2.LINE_AA)
+        cv2.line(img, (int(u2), int(v2)), (int(u3), int(v3)), 255, 2, lineType=cv2.LINE_AA)
+        cv2.line(img, (int(u3), int(v3)), (int(u4), int(v4)), 255, 2, lineType=cv2.LINE_AA)
+        cv2.line(img, (int(u4), int(v4)), (int(u1), int(v1)), 255, 2, lineType=cv2.LINE_AA)
 
         # wall_list = [self.get_min_distance_with_wall(center, uvs) for (center, uvs) in zip(centers, uvs_list)]
         # max_wall = max(wall_list)
@@ -189,14 +235,15 @@ class GraspDetector:
         # wall_score = (wall_list - min_wall) / (max_wall - min_wall + 0.0001)
 
         # TMP!!!!!
-        final_score = depth_score * 0.6 + ellipse_score * 0.2 + wall_score * 0.3
+        # final_score = depth_score * 0.2 + ellipse_score * 0.2 + wall_score * 1.0
+        final_score = depth_score * 1.0 + ellipse_score * 0.0 + wall_score * 0.8 + angle_score * 0.0 + area_score * 0.5
 
         printg(wall_score)
 
         for i in range(len(final_score)):
            cv2.putText(img, f"{final_score[i]:.2f}", 
-                       (centers[i][0] + 5, centers[i][1] + 5), 
-                       cv2.FONT_HERSHEY_DUPLEX, 0.5, (255, 0, 255), 1)
+                       (centers[i][0] - 5, centers[i][1] + 5), 
+                       cv2.FONT_HERSHEY_DUPLEX, 1, (255, 0, 255), 1)
         
 
         while final_score.size > 0:
@@ -210,7 +257,7 @@ class GraspDetector:
                 ellipse_list = np.delete(ellipse_list, target_index, axis=0) # 同上
                 printy("Inappropreate target")
 
-        cv2.putText(img, f"{final_score[target_index]:.2f}", (centers[target_index][0] + 5, centers[target_index][1] + 5), cv2.FONT_HERSHEY_DUPLEX, 0.5, (255, 255, 255), 1)
+        # cv2.putText(img, f"{final_score[target_index]:.2f}", (centers[target_index][0] + 5, centers[target_index][1] + 5), cv2.FONT_HERSHEY_DUPLEX, 0.5, (255, 255, 255), 1)
         cv2.ellipse(img, ellipse_list[target_index], (0, 255, 255), 3)
         return target_index, img, max(final_score), centers, contours
 
@@ -472,7 +519,7 @@ class InsertionCalculator:
                     update = False
                     break
                 worst_depth = min(worst_depth, 
-                                self.point_average_depth(hi, wi, depth, finger_radius_px))
+                                self.point_average_depth(hi, wi, depth, finger_radius_px * 2))
                 
             # cabbage_size_mm * 0.6でキャベツの高さをイメージ
             if (worst_depth - center_d) / (cabbage_size_mm * 0.6) > 1:

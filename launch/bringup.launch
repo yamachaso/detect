@@ -8,7 +8,7 @@
 
     <!-- <arg name="finger_num" default="4" /> -->
     <arg name="finger_num" default="3" />
-    <arg name="unit_angle" default="15" />
+    <arg name="unit_angle" default="3" />
     <!-- <arg name="hand_radius_mm" default="152.5" /> -->
     <arg name="hand_radius_mm" default="100" />
     <arg name="finger_radius_mm" default="15" />

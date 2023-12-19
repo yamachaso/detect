@@ -247,7 +247,7 @@ class GraspDetectionServer:
     # def check_wall_contact(self, pose_stamped_msg):
     def check_wall_contact(self, contours_3d_list):
        
-        contact_dis = 0.09 # 15cm以内だったらコンテナと接触している
+        contact_dis = 0.06 # 15cm以内だったらコンテナと接触している
         r, t, l, b = 1, 2, 4, 8
         res = 0
 
@@ -285,6 +285,29 @@ class GraspDetectionServer:
 
         return res
 
+
+    def depth_noise_clear(self, depth, radius = 5):
+        valid_mask = np.ones_like(depth).astype(np.bool)
+        valid_mask[depth < 50] = False
+        valid_mask[depth > 1800] = False
+        depth_new = depth.copy()
+        depth_ave = depth[valid_mask].mean() # すべての平均の深さ
+
+        for h, w in zip(*np.where(valid_mask == False)):
+            circle_mask = np.zeros_like(depth)
+            cv2.circle(circle_mask, (w, h), radius, 1, thickness=-1)
+            circle_mask = circle_mask.astype(np.bool)
+            depth_array = depth[valid_mask * circle_mask]
+            if depth_array.size != 0:
+                depth_new[h][w] = depth_array.mean()
+            else:
+                depth_new[h][w] = depth_ave
+        
+        return depth_new
+        
+
+
+
     def callback(self, goal: GraspDetectionGoal):
         printb("grasp detect callback called")
         # 0: left, 1: right
@@ -301,7 +324,7 @@ class GraspDetectionServer:
             depth = self.bridge.imgmsg_to_cv2(depth_msg)
             instances = self.is_client.predict(img_msg) # List[Instance]
 
-            vis_base_img_msg = img_msg
+            depth = self.depth_noise_clear(depth) # 試験導入
 
             (centers, contours, masks) = self.instances2centers_contours_masks(depth, instances)
 
@@ -386,8 +409,6 @@ class GraspDetectionServer:
             img = self.bridge.imgmsg_to_cv2(img_msg)
             depth = self.bridge.imgmsg_to_cv2(depth_msg)
             instances = self.is_client.predict(img_msg) # List[Instance]
-
-            vis_base_img_msg = img_msg
 
             scores = [instance_msg.score for instance_msg in instances]
             printy("SCORES: {}".format(scores))
@@ -489,17 +510,14 @@ class GraspDetectionServer:
             img = self.bridge.imgmsg_to_cv2(img_msg)
             depth = self.bridge.imgmsg_to_cv2(depth_msg)
             instances = self.is_client.predict(img_msg) # List[Instance]
-            # TODO: depthしきい値を求めるためにmerged_maskが必要だが非効率なので要改善
-            # print(instances[0].contour)
-            # print(type(instances[0].contour))
+
+            # 斜めの挿入時に演算に時間がかかっていたが、それは壁際で深度情報のノイズが大きいため？
+            # ということで、以下コメントアウト
+            # depth = self.depth_noise_clear(depth) # 試験導入
 
             # contours = np.array([multiarray2numpy(int, np.int32, instance_msg.contour) for instance_msg in instances], dtype=object)
             contours = np.array([multiarray2numpy(int, np.int32, instance_msg.contour) for instance_msg in instances])
             centers = np.array([np.array(instance_msg.center) for instance_msg in instances])
-
-            # centers_3d_list = [self.compute_object_center_pose_stampd(
-            #     self.projector.screen_to_camera_2(points_msg, centers_i), header
-            # ) for centers_i in centers]
 
             centers_3d_list = []
             for center_i in centers:
@@ -527,7 +545,7 @@ class GraspDetectionServer:
 
             printc("distance! : {} m".format(distance_list[target_index]))
             printc("distance_old! : {} m".format(distance_list_old[target_index]))
-            if distance_list[target_index] > 0.15: # 10cm以上異なったらそれは別のキャベツなのでNG
+            if distance_list[target_index] > 0.15: # 15cm以上異なったらそれは別のキャベツなのでNG
                 success = False
 
             contour = contours[target_index]
