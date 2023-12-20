@@ -545,7 +545,7 @@ class GraspDetectionServer:
 
             printc("distance! : {} m".format(distance_list[target_index]))
             printc("distance_old! : {} m".format(distance_list_old[target_index]))
-            if distance_list[target_index] > 0.15: # 15cm以上異なったらそれは別のキャベツなのでNG
+            if distance_list[target_index] > 0.06: # 6cm以上異なったらそれは別のキャベツなのでNG
                 success = False
 
             contour = contours[target_index]
@@ -559,7 +559,7 @@ class GraspDetectionServer:
             # 把持のとき、ハンドとキャベツをどのくらい離すか？
             access_distance = self.insertion_calculator.get_access_distance(contour)
 
-            print("DDDDD:", d)
+            print("depth:", d)
             if d < 0:
                 success = False
 

@@ -553,6 +553,10 @@ class InsertionCalculator:
 
         best_r = self._convert_px_to_mm(best_r, center_d) # mm単位に
 
+        if cabbage_size_mm > 250:
+            printg("cabbage too big, maybe multiple cabbages")
+            d = -1
+
 
         return best_x, best_y, best_t, best_r, center_d
 
