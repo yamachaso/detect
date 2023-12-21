@@ -34,7 +34,7 @@ class ExclusionListServer:
             else:
                 self.exclusion_list[arm_index].append([u, v])
                 # 5個より多くなったら古いものから削除
-                if len(self.exclusion_list[arm_index]) > 3:
+                if len(self.exclusion_list[arm_index]) > 5:
                     self.exclusion_list[arm_index].pop(0)
 
             result = ExclusionListResult(

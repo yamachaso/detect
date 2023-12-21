@@ -3,6 +3,7 @@ from multiprocessing import Pool
 from time import time
 from typing import List
 
+import math
 import os
 from datetime import datetime
 import cv2
@@ -83,6 +84,7 @@ class GraspDetectionServer:
         self.dbg_info_publisher = rospy.Publisher("/grasp_detection_server/result/debug", GraspDetectionDebugInfo, queue_size=10) if debug else None
         # Action Clients
         self.is_client = InstanceSegmentationClient()
+        self.is_client2 = InstanceSegmentationClient("instance_segmentation_server2")
         # self.cdt_client = ComputeDepthThresholdClient() if enable_depth_filter else None
         self.tf_client = TFClient("base_link") # base_linkの座標系に変換するtf変換クライアント
         self.el_client = ExclusionListClient()
@@ -322,9 +324,10 @@ class GraspDetectionServer:
             start_time = time()
             img = self.bridge.imgmsg_to_cv2(img_msg)
             depth = self.bridge.imgmsg_to_cv2(depth_msg)
+            # instances = self.is_client2.predict(img_msg) # List[Instance]
             instances = self.is_client.predict(img_msg) # List[Instance]
 
-            depth = self.depth_noise_clear(depth) # 試験導入
+            # depth = self.depth_noise_clear(depth) # 試験導入
 
             (centers, contours, masks) = self.instances2centers_contours_masks(depth, instances)
 
@@ -492,6 +495,8 @@ class GraspDetectionServer:
         y = a_msg.pose.position.y - b_msg.pose.position.y
         z = a_msg.pose.position.z - b_msg.pose.position.z
 
+        print("x, y, z : : : : ", x, y, z)
+
         return np.sqrt(x**2 + y**2 + z**2)
         # return np.sqrt(x**2 + y**2)
 
@@ -539,8 +544,15 @@ class GraspDetectionServer:
 
             distance_list = [self.distance_btw_pose_stamped(self.approach_center_pose_stamped_msg, centers_3d_list_i) for centers_3d_list_i in centers_3d_list]
             distance_list_old = [self.distance_btw_pose_stamped(self.approach_center_pose_stamped_msg, centers_3d_list_i) for centers_3d_list_i in centers_3d_list_old]
+            
+            distance_list_no_nan =[]
+            for x in distance_list:
+                if math.isnan(x):
+                    distance_list_no_nan.append(100)
+                else:
+                    distance_list_no_nan.append(x)
 
-            target_index = np.argmin(distance_list)
+            target_index = np.argmin(distance_list_no_nan)
             success = True
 
             printc("distance! : {} m".format(distance_list[target_index]))

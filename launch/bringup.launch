@@ -80,6 +80,7 @@
     <!-- action server -->
     <node name="tf_transform_server" pkg="detect" type="tf_transform_server.py" />
     <node name="instance_segmentation_server" pkg="detect" type="instance_segmentation_server.py" />
+    <node name="instance_segmentation_server2" pkg="detect" type="instance_segmentation_server2.py" />
     <node name="grasp_detection_server" pkg="detect" type="grasp_detection_server.py" output="screen" />
     <node name="container_position_server" pkg="detect" type="container_position_server.py" />
     <node name="exclusion_list_server" pkg="detect" type="exclusion_list_server.py" />
