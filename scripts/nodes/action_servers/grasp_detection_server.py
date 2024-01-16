@@ -467,7 +467,7 @@ class GraspDetectionServer:
         b = 6.71
         if arm_index == 0:
             # c = 10.84
-            c = 30
+            c = 25
         else:
             c = 35
              
