@@ -28,6 +28,9 @@ if __name__ == "__main__":
             if av[1] < 0:
                 angle = -angle
 
+            # for down temp
+            angle = 0
+
             br = tf.TransformBroadcaster()
             br.sendTransform((trans[0], trans[1], trans[2]),
                             # tf.transformations.quaternion_from_euler(math.pi / 2, 0, -math.pi / 2), # z ,y, xの順で回転。引数は 3 ,2 ,1の順番

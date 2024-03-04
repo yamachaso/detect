@@ -31,11 +31,22 @@
 
 	<node name="container_tf_adjuster" pkg="detect" type="container_tf_adjuster.py" output="screen" />
 
+<!--
   <node pkg="tf" type="static_transform_publisher" name="container_br" args="0 -0.59 0.12 0 0 0 /container_origin /container_br 30"/>
   <node pkg="tf" type="static_transform_publisher" name="container_tr" args="1 -0.59 0.12 0 0 0 /container_origin /container_tr 30"/>
   <node pkg="tf" type="static_transform_publisher" name="container_tl" args="1 0.59 0.12 0 0 0 /container_origin /container_tl 30"/>
   <node pkg="tf" type="static_transform_publisher" name="container_bl" args="0 0.59 0.12 0 0 0 /container_origin /container_bl 30"/>
   <node pkg="tf" type="static_transform_publisher" name="container_base" args="0.5 0 -0.78 0 0 0 /container_origin /container_base 30"/>
+-->
+
+  <node pkg="tf" type="static_transform_publisher" name="container_br" args="-0.98 -0.59 0.12 0 0 0 /container_origin /container_br 30"/>
+  <node pkg="tf" type="static_transform_publisher" name="container_tr" args="0.02 -0.59 0.12 0 0 0 /container_origin /container_tr 30"/>
+  <node pkg="tf" type="static_transform_publisher" name="container_tl" args="0.02 0.59 0.12 0 0 0 /container_origin /container_tl 30"/>
+  <node pkg="tf" type="static_transform_publisher" name="container_bl" args="-0.98 0.59 0.12 0 0 0 /container_origin /container_bl 30"/>
+  <node pkg="tf" type="static_transform_publisher" name="container_base" args="-0.48 0 -0.78 0 0 0 /container_origin /container_base 30"/>
+
+
+
 
 <!-- 
 

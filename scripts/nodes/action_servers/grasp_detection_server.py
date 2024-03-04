@@ -246,10 +246,45 @@ class GraspDetectionServer:
 
         return contours_list
 
-    # def check_wall_contact(self, pose_stamped_msg):
+    def check_wall_contact_legacy(self, pose_stamped_msg):
+        contact_dis = 0.125 # 12.5cm以内だったらコンテナと接触している
+        px = pose_stamped_msg.pose.position.x
+        py = pose_stamped_msg.pose.position.y
+
+        r, t, l, b = 1, 2, 4, 8
+        res = 0
+
+        wall_distance_r = 100000000
+        wall_distance_t = 100000000
+        wall_distance_l = 100000000
+        wall_distance_b = 100000000
+
+        br_x, br_y, tr_x, tr_y, tl_x, tl_y, bl_x, bl_y = self.get_corner_coordinate()
+
+        print(br_x, br_y, tr_x, tr_y, tl_x, tl_y, bl_x, bl_y)
+
+        if self.distance_point_between_line(px, py, br_x, br_y, tr_x, tr_y) < contact_dis:
+            res |= r
+        if self.distance_point_between_line(px, py, tr_x, tr_y, tl_x, tl_y) < contact_dis:
+            res |= t
+        if self.distance_point_between_line(px, py, tl_x, tl_y, bl_x, bl_y) < contact_dis:
+            res |= l
+        if self.distance_point_between_line(px, py, bl_x, bl_y, br_x, br_y) < contact_dis:
+            res |= b
+
+        wall_distance_r = min(wall_distance_r, self.distance_point_between_line(px, py, br_x, br_y, tr_x, tr_y))
+        wall_distance_t = min(wall_distance_t, self.distance_point_between_line(px, py, tr_x, tr_y, tl_x, tl_y))
+        wall_distance_l = min(wall_distance_l, self.distance_point_between_line(px, py, tl_x, tl_y, bl_x, bl_y))
+        wall_distance_b = min(wall_distance_b, self.distance_point_between_line(px, py, bl_x, bl_y, br_x, br_y))
+
+        printb("wall_distance")
+        printb("right : {}, top : {}, left : {}, bottom : {}".format(wall_distance_r, wall_distance_t, wall_distance_l, wall_distance_b))
+
+        return res
+
     def check_wall_contact(self, contours_3d_list):
        
-        contact_dis = 0.06 # 15cm以内だったらコンテナと接触している
+        contact_dis = 0.035 # 15cm以内だったらコンテナと接触している
         r, t, l, b = 1, 2, 4, 8
         res = 0
 
@@ -266,6 +301,8 @@ class GraspDetectionServer:
 
 
             br_x, br_y, tr_x, tr_y, tl_x, tl_y, bl_x, bl_y = self.get_corner_coordinate()
+
+            print(br_x, br_y, tr_x, tr_y, tl_x, tl_y, bl_x, bl_y)
 
 
             if self.distance_point_between_line(px, py, br_x, br_y, tr_x, tr_y) < contact_dis:
@@ -353,18 +390,22 @@ class GraspDetectionServer:
             # compute center pose stamped (world coords)
             # insertion_points_msg = [pt.point for pt in self.tf_client.transform_points(header, insertion_points_c)]
 
+            printr("target center : {}".format(centers[target_index]))
+
             
             center_pose_stamped_msg = self.compute_object_center_pose_stampd(c_3d_c_on_surface, header)
             # center_pose_stamped_msg = self.compute_object_center_pose_stampd(depth, masks[target_index], c_3d_c_on_surface, header)
-
+            print("center_pose : ", center_pose_stamped_msg)
             printb("####")
             contours_list = self.compute_contours_list(img.shape[:2], centers[target_index], contours[target_index])
             printb("$$$$")
             contours_3d_list = [self.compute_object_center_pose_stampd(
                 self.projector.screen_to_camera_2(points_msg, contours_list_i), header
             ) for contours_list_i in contours_list]
-            contact = self.check_wall_contact(contours_3d_list)
+            # contact = self.check_wall_contact(contours_3d_list)
 
+            contact = self.check_wall_contact_legacy(center_pose_stamped_msg)
+            print("contact : ", contact)
 
             u, v = centers[target_index]
             point_tuple_2d = PointTuple2D(uv=[u ,v])
@@ -467,7 +508,8 @@ class GraspDetectionServer:
         b = 6.71
         if arm_index == 0:
             # c = 10.84
-            c = 25
+            # c = 25
+            c = 30
         else:
             c = 35
              
@@ -495,7 +537,7 @@ class GraspDetectionServer:
         y = a_msg.pose.position.y - b_msg.pose.position.y
         z = a_msg.pose.position.z - b_msg.pose.position.z
 
-        print("x, y, z : : : : ", x, y, z)
+        # print("x, y, z : : : : ", x, y, z)
 
         return np.sqrt(x**2 + y**2 + z**2)
         # return np.sqrt(x**2 + y**2)
